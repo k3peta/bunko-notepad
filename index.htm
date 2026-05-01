@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>縦書きドラフト</title>
+  <style>
+    :root {
+      --bg: #e7e3da;
+      --bar: #f5f2eb;
+      --paper: #fffdf8;
+      --ink: #24211d;
+      --muted: #6f6a61;
+      --line: #d6d0c5;
+      --accent: #315f7b;
+      --chars: 40;
+      --lines: 15;
+      --page-padding: 28px;
+      --ruler-height: 18px;
+      --font-size: 22px;
+      --char-pitch: 22px;
+      --line-pitch: 38px;
+      --font-ui: "Hiragino Sans", "Yu Gothic", "BIZ UDPGothic", sans-serif;
+      --font-body: "Hiragino Mincho ProN", "Yu Mincho", "BIZ UDPMincho", serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font-ui);
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+      color: inherit;
+    }
+
+    button,
+    input[type="text"],
+    select {
+      height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: var(--paper);
+      padding: 4px 9px;
+    }
+
+    button {
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    button.primary {
+      color: #fff;
+      border-color: var(--accent);
+      background: var(--accent);
+    }
+
+    .app {
+      height: 100vh;
+      display: flex;
+      flex-direction: row;
+      min-width: 0;
+    }
+
+    .field {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .field input[type="text"] {
+      width: 132px;
+      color: var(--ink);
+    }
+
+    .spacer {
+      flex: 1 1 auto;
+      min-width: 12px;
+    }
+
+    .status {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .work {
+      flex: 1 1 auto;
+      min-height: 0;
+      padding: 28px 28px 28px 20px;
+      overflow: hidden;
+    }
+
+    .paper {
+      position: relative;
+      width: min(100%, calc(var(--line-pitch) * var(--lines) * 2 + var(--page-padding) * 2));
+      height: 100%;
+      margin-left: auto;
+      border: 1px solid #cfc7b9;
+      background: var(--paper);
+      box-shadow: 0 1px 2px rgba(36, 33, 29, 0.08);
+      overflow: hidden;
+    }
+
+    .paper::before {
+      content: "";
+      position: absolute;
+      left: var(--page-padding);
+      right: var(--page-padding);
+      top: calc(var(--page-padding) + var(--char-pitch));
+      bottom: var(--page-padding);
+      border: 1px solid rgba(70, 62, 50, 0.13);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .paper.no-ruler::before {
+      top: var(--page-padding);
+    }
+
+    .paper-guides {
+      position: absolute;
+      left: var(--page-padding);
+      right: var(--page-padding);
+      top: calc(var(--page-padding) + var(--char-pitch));
+      bottom: var(--page-padding);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .paper.no-ruler .paper-guides {
+      top: var(--page-padding);
+    }
+
+    .paper.show-grid .paper-guides::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(to left, rgba(70, 62, 50, 0.075) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(70, 62, 50, 0.055) 1px, transparent 1px);
+      background-position: right top;
+      background-size:
+        var(--line-pitch) 100%,
+        100% var(--char-pitch);
+    }
+
+    .paper.show-page-break .paper-guides::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      right: calc(var(--line-pitch) * var(--lines));
+      width: 1px;
+      background: rgba(49, 95, 123, 0.22);
+    }
+
+    .line-ruler {
+      position: absolute;
+      top: 6px;
+      right: var(--page-padding);
+      z-index: 4;
+      width: calc(var(--line-pitch) * var(--lines));
+      height: var(--ruler-height);
+      overflow: hidden;
+      color: rgba(111, 106, 97, 0.78);
+      font-size: 10px;
+      line-height: 1;
+      user-select: none;
+    }
+
+    .line-ruler[hidden] { display: none; }
+
+    .line-ruler-track {
+      display: flex;
+      flex-direction: row-reverse;
+      align-items: center;
+      justify-content: flex-start;
+      height: 100%;
+      width: 100%;
+    }
+
+    .line-ruler span {
+      flex: 0 0 var(--line-pitch);
+      text-align: center;
+    }
+
+    #editor {
+      position: relative;
+      z-index: 3;
+      width: calc(100% - var(--page-padding) * 2);
+      height: calc(100% - var(--page-padding) * 2 - var(--char-pitch));
+      margin: calc(var(--page-padding) + var(--char-pitch)) var(--page-padding) var(--page-padding);
+      border: 0;
+      outline: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      background: transparent;
+      color: var(--ink);
+      font-family: var(--font-body);
+      font-size: var(--font-size);
+      line-height: var(--line-pitch);
+      letter-spacing: 0;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      white-space: pre-wrap;
+      word-break: normal;
+      line-break: strict;
+      hanging-punctuation: allow-end;
+      font-feature-settings: "palt" 0, "halt" 0, "vhal" 0;
+      font-kerning: none;
+      scrollbar-width: thin;
+      resize: none;
+      padding: 0;
+    }
+
+
+    .paper.no-ruler #editor {
+      height: calc(100% - var(--page-padding) * 2);
+      margin-top: var(--page-padding);
+    }
+
+    .side {
+      flex: 0 0 300px;
+      width: 300px;
+      height: 100vh;
+      width: 300px;
+      border-right: 1px solid var(--line);
+      background: var(--bar);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      overflow: auto;
+    }
+
+    .side h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .drawer-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .side .block {
+      display: grid;
+      gap: 8px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+
+    .side label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .side label.field {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      line-height: 1.45;
+      min-height: 24px;
+      color: var(--ink);
+    }
+
+    .side label.field input[type="checkbox"] {
+      flex: 0 0 auto;
+      width: 14px;
+      height: 14px;
+      margin: 0;
+    }
+
+    .side input[type="text"],
+    .side select {
+      width: 100%;
+      color: var(--ink);
+    }
+
+    .outline-list {
+      display: grid;
+      gap: 6px;
+      max-height: 220px;
+      margin: 0;
+      padding: 0;
+      overflow: auto;
+      list-style: none;
+    }
+
+    .outline-item {
+      display: grid;
+      grid-template-columns: 24px 1fr;
+      gap: 8px;
+      align-items: center;
+      padding: 7px 8px;
+      border: 1px solid rgba(70, 62, 50, 0.12);
+      border-radius: 4px;
+      background: rgba(255, 253, 248, 0.74);
+      cursor: grab;
+    }
+
+    .outline-item:hover,
+    .outline-item:focus-visible {
+      border-color: rgba(49, 95, 123, 0.3);
+      background: var(--paper);
+      outline: none;
+    }
+
+    .outline-item.dragging {
+      opacity: 0.52;
+    }
+
+    .outline-index {
+      display: grid;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(49, 95, 123, 0.12);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .outline-text {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .outline-title {
+      overflow: hidden;
+      color: var(--ink);
+      font-size: 13px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .outline-meta,
+    .empty-note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    #fileInput { display: none; }
+
+    .preview {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: none;
+      background: rgba(36, 33, 29, 0.36);
+    }
+
+    .preview.is-open {
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .preview-head {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--bar);
+    }
+
+    .preview-body {
+      overflow: auto;
+      padding: 24px;
+      background: var(--bg);
+    }
+
+    .preview-spread {
+      width: max-content;
+      margin: 0 auto 24px;
+    }
+
+    .preview-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .preview-pages {
+      display: grid;
+      grid-template-columns: auto auto;
+      gap: 24px;
+      align-items: start;
+    }
+
+    .preview-page {
+      padding: 28px;
+      border: 1px solid #cfc7b9;
+      background: var(--paper);
+    }
+
+    .preview-page-head {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .preview-viewport {
+      width: calc(var(--line-pitch) * var(--lines));
+      height: calc(var(--char-pitch) * (var(--chars) + 0.5));
+      overflow: visible;
+      position: relative;
+      background: var(--paper);
+    }
+
+    .preview-manuscript {
+      display: flex;
+      flex-direction: row-reverse;
+      align-items: flex-start;
+      width: calc(var(--line-pitch) * var(--lines));
+      height: calc(var(--char-pitch) * var(--chars));
+      overflow: visible;
+      font-family: var(--font-body);
+      font-size: var(--font-size);
+      line-height: 1;
+      font-feature-settings: "palt" 0, "halt" 0, "vhal" 0;
+      font-kerning: none;
+    }
+
+    .preview-line {
+      position: relative;
+      flex: 0 0 var(--line-pitch);
+      height: calc(var(--char-pitch) * var(--chars));
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      white-space: nowrap;
+      overflow: visible;
+    }
+
+    .preview-char,
+    .preview-hanging {
+      position: absolute;
+      right: 50%;
+      width: var(--char-pitch);
+      height: var(--char-pitch);
+      display: grid;
+      place-items: center;
+      transform: translateX(50%);
+    }
+
+    .preview-hanging {
+      top: calc(var(--char-pitch) * var(--chars));
+    }
+
+    .preview-char.tcy {
+      writing-mode: horizontal-tb;
+      text-orientation: mixed;
+      font-size: max(10px, calc(var(--font-size) * 0.72));
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+
+    .ruby-stack {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 100%;
+      height: 100%;
+    }
+
+    .ruby-rb {
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+    }
+
+    .ruby-rt {
+      position: absolute;
+      right: calc(var(--char-pitch) * -0.42);
+      top: 0;
+      height: calc(var(--char-pitch) * var(--ruby-span, 1));
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      font-size: max(6px, calc(var(--font-size) * 0.42));
+      line-height: 1;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="side" id="side">
+      <h2>設定</h2>
+      <div class="drawer-grid">
+        <button id="newButton">新規</button>
+        <button id="openButton">開く</button>
+        <button class="primary" id="saveButton">保存</button>
+        <button id="saveAsButton">別名保存</button>
+      </div>
+      <input id="fileInput" type="file" accept=".txt,.md,.text,text/plain">
+
+      <div class="block">
+        <label>ファイル名 <input id="fileNameInput" type="text" value="縦書きドラフト.txt"></label>
+        <label>一行文字数
+          <select id="charsSelect">
+            <option value="39">39</option>
+            <option value="40" selected>40</option>
+            <option value="41">41</option>
+          </select>
+        </label>
+        <label>一頁行数
+          <select id="linesSelect">
+            <option value="15" selected>15</option>
+            <option value="16">16</option>
+          </select>
+        </label>
+        <label class="field"><input id="lineNumberToggle" type="checkbox" checked> 欄外に行番号を表示</label>
+        <label class="field"><input id="pageBreakToggle" type="checkbox" checked> ページ区切り線を表示</label>
+        <label class="field"><input id="gridToggle" type="checkbox" checked> 原稿用紙の薄い枡を表示</label>
+        <span class="status" id="statusLabel">0字 / 0行</span>
+      </div>
+
+      <div class="block">
+        <label>検索 <input id="searchInput" type="text"></label>
+        <label>置換 <input id="replaceInput" type="text"></label>
+        <label class="field"><input id="regexToggle" type="checkbox"> 検索語を正規表現として扱う</label>
+        <div class="drawer-grid">
+          <button id="replaceNextButton">置換検索</button>
+          <button id="replaceAllButton">全置換</button>
+        </div>
+      </div>
+
+      <div class="block">
+        <strong class="status">見出し</strong>
+        <ul class="outline-list" id="outlineList"></ul>
+        <div class="empty-note" id="outlineEmpty">半角の # と空白で始まる行を拾います。</div>
+      </div>
+
+      <div class="block">
+        <button id="previewButton">プレビュー</button>
+      </div>
+    </aside>
+
+    <main class="work">
+      <div class="paper">
+        <div class="paper-guides" aria-hidden="true"></div>
+        <div class="line-ruler" id="lineRuler" aria-hidden="true">
+          <div class="line-ruler-track" id="lineRulerTrack"></div>
+        </div>
+        <textarea id="editor" spellcheck="false" placeholder="ここへ入力"></textarea>
+      </div>
+    </main>
+  </div>
+
+  <section class="preview" id="preview">
+    <div class="preview-head">
+      <strong>プレビュー</strong>
+      <span class="status" id="previewStatus"></span>
+      <div class="spacer"></div>
+      <button id="closePreviewButton">閉じる</button>
+    </div>
+    <div class="preview-body" id="previewBody"></div>
+  </section>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'bunko-simple-draft';
+      const editor = document.getElementById('editor');
+      const preview = document.getElementById('preview');
+      const previewBody = document.getElementById('previewBody');
+      const previewStatus = document.getElementById('previewStatus');
+      const statusLabel = document.getElementById('statusLabel');
+      const fileInput = document.getElementById('fileInput');
+      const fileNameInput = document.getElementById('fileNameInput');
+      const charsSelect = document.getElementById('charsSelect');
+      const linesSelect = document.getElementById('linesSelect');
+      const lineNumberToggle = document.getElementById('lineNumberToggle');
+      const pageBreakToggle = document.getElementById('pageBreakToggle');
+      const gridToggle = document.getElementById('gridToggle');
+      const lineRuler = document.getElementById('lineRuler');
+      const lineRulerTrack = document.getElementById('lineRulerTrack');
+      const outlineList = document.getElementById('outlineList');
+      const outlineEmpty = document.getElementById('outlineEmpty');
+      const searchInput = document.getElementById('searchInput');
+      const replaceInput = document.getElementById('replaceInput');
+      const regexToggle = document.getElementById('regexToggle');
+
+      const state = {
+        fileName: '縦書きドラフト.txt',
+        fileHandle: null,
+        chars: 40,
+        lines: 15,
+        showLineNumbers: true,
+        showPageBreak: true,
+        showGrid: true,
+        outlineItems: [],
+        dirty: false
+      };
+      let history = [];
+      let historyIndex = -1;
+      let restoringHistory = false;
+
+      const sampleText = [
+        '# 使い方',
+        '',
+        'この軽量版は、縦書きのまま直接入力できることを優先した原稿エディタです。',
+        'ページ風の固定面に入力しながら、必要に応じて正確な組版プレビューを確認できます。',
+        '',
+        '# 入力',
+        '',
+        '通常の本文はそのまま入力します。句読点の厳密なぶら下げはプレビューで確認します。',
+        '',
+        '# ファイル',
+        '',
+        'txt の読み込み、保存、名前を付けて保存に対応します。'
+      ].join('\n');
+
+      function normalize(text) {
+        return String(text).replace(/\r\n?/g, '\n');
+      }
+
+      function escapeHtml(text) {
+        return text.replace(/[&<>"]/g, ch => ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;'
+        }[ch]));
+      }
+
+      function getText() {
+        return normalize(editor.value);
+      }
+
+      function setText(text) {
+        editor.value = normalize(text);
+      }
+
+      function snapshot() {
+        return {
+          text: getText(),
+          start: editor.selectionStart || 0,
+          end: editor.selectionEnd || 0
+        };
+      }
+
+      function pushHistory() {
+        if (restoringHistory) return;
+        const next = snapshot();
+        const current = history[historyIndex];
+        if (current && current.text === next.text && current.start === next.start && current.end === next.end) return;
+        history = history.slice(0, historyIndex + 1);
+        history.push(next);
+        historyIndex = history.length - 1;
+      }
+
+      function resetHistory() {
+        history = [snapshot()];
+        historyIndex = 0;
+      }
+
+      function restoreSnapshot(entry) {
+        if (!entry) return;
+        restoringHistory = true;
+        setText(entry.text);
+        const start = Math.max(0, Math.min(entry.start, editor.value.length));
+        const end = Math.max(start, Math.min(entry.end, editor.value.length));
+        editor.setSelectionRange(start, end);
+        restoringHistory = false;
+        state.dirty = true;
+        updateStatus();
+        renderLineRuler();
+        renderOutline();
+      }
+
+      function undoEdit() {
+        if (historyIndex <= 0) return;
+        historyIndex -= 1;
+        restoreSnapshot(history[historyIndex]);
+      }
+
+      function redoEdit() {
+        if (historyIndex >= history.length - 1) return;
+        historyIndex += 1;
+        restoreSnapshot(history[historyIndex]);
+      }
+
+      function applySettings() {
+        const paper = document.querySelector('.paper');
+        const available = Math.max(240, editor.clientHeight || (paper.clientHeight - 56));
+        const charPitch = available / state.chars;
+        const fontSize = Math.max(6, charPitch);
+        document.documentElement.style.setProperty('--chars', state.chars);
+        document.documentElement.style.setProperty('--lines', state.lines);
+        document.documentElement.style.setProperty('--char-pitch', `${charPitch}px`);
+        document.documentElement.style.setProperty('--font-size', `${fontSize}px`);
+        charsSelect.value = String(state.chars);
+        linesSelect.value = String(state.lines);
+        lineNumberToggle.checked = state.showLineNumbers;
+        pageBreakToggle.checked = state.showPageBreak;
+        gridToggle.checked = state.showGrid;
+        lineRuler.hidden = !state.showLineNumbers;
+        paper.classList.toggle('no-ruler', !state.showLineNumbers);
+        paper.classList.toggle('show-page-break', state.showPageBreak);
+        paper.classList.toggle('show-grid', state.showGrid);
+        fileNameInput.value = state.fileName;
+        document.title = state.fileName.replace(/\.txt$/i, '') + ' - 縦書きドラフト';
+        renderLineRuler();
+        renderOutline();
+      }
+
+      function renderLineRuler() {
+        lineRulerTrack.innerHTML = Array.from({ length: state.lines }, (_item, index) => {
+          return `<span>${index + 1}</span>`;
+        }).join('');
+      }
+
+      function extractHeadings(text) {
+        const headings = [];
+        const lines = normalize(text).split('\n');
+        let offset = 0;
+        lines.forEach((line, index) => {
+          const match = line.match(/^(#{1,3})\s+(.+?)\s*$/);
+          if (match) {
+            headings.push({
+              start: offset,
+              end: offset + line.length,
+              lineNumber: index + 1,
+              level: match[1].length,
+              title: match[2]
+            });
+          }
+          offset += line.length + 1;
+        });
+        return headings;
+      }
+
+      function chooseReorderableHeadings(headings) {
+        return headings;
+      }
+
+      function renderOutline() {
+        const headings = chooseReorderableHeadings(extractHeadings(getText()));
+        state.outlineItems = headings;
+        outlineList.innerHTML = '';
+        outlineEmpty.hidden = headings.length > 0;
+        headings.forEach((heading, index) => {
+          const item = document.createElement('li');
+          item.className = 'outline-item';
+          item.draggable = true;
+          item.tabIndex = 0;
+          item.dataset.index = String(index);
+          item.innerHTML = `
+            <span class="outline-index">${index + 1}</span>
+            <span class="outline-text">
+              <span class="outline-title">${escapeHtml(heading.title)}</span>
+              <span class="outline-meta">${heading.lineNumber}行目 / H${heading.level}</span>
+            </span>
+          `;
+          item.addEventListener('click', () => focusEditorRange(heading.start, heading.end));
+          item.addEventListener('dragstart', handleOutlineDragStart);
+          item.addEventListener('dragend', handleOutlineDragEnd);
+          item.addEventListener('dragover', handleOutlineDragOver);
+          item.addEventListener('drop', handleOutlineDrop);
+          outlineList.appendChild(item);
+        });
+      }
+
+      function focusEditorRange(start, end) {
+        editor.focus();
+        editor.setSelectionRange(start, end);
+      }
+
+      function handleOutlineDragStart(event) {
+        event.currentTarget.classList.add('dragging');
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', event.currentTarget.dataset.index);
+      }
+
+      function handleOutlineDragEnd(event) {
+        event.currentTarget.classList.remove('dragging');
+      }
+
+      function handleOutlineDragOver(event) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+      }
+
+      function handleOutlineDrop(event) {
+        event.preventDefault();
+        const fromIndex = Number(event.dataTransfer.getData('text/plain'));
+        const toIndex = Number(event.currentTarget.dataset.index);
+        reorderOutlineSections(fromIndex, toIndex);
+      }
+
+      function reorderOutlineSections(fromIndex, toIndex) {
+        const headings = state.outlineItems;
+        if (!Number.isInteger(fromIndex) || !Number.isInteger(toIndex) || fromIndex === toIndex) return;
+        if (fromIndex < 0 || toIndex < 0 || fromIndex >= headings.length || toIndex >= headings.length) return;
+        const text = getText();
+        const prefix = text.slice(0, headings[0].start);
+        const sections = headings.map((heading, index) => {
+          const nextStart = index + 1 < headings.length ? headings[index + 1].start : text.length;
+          return text.slice(heading.start, nextStart);
+        });
+        const moved = sections.splice(fromIndex, 1)[0];
+        sections.splice(toIndex, 0, moved);
+        setText(prefix + joinSections(sections));
+        editor.setSelectionRange(headings[toIndex].start, headings[toIndex].start);
+        markDirty();
+        pushHistory();
+        renderOutline();
+      }
+
+      function joinSections(sections) {
+        return sections.reduce((output, section) => {
+          if (!output) return section;
+          return output.endsWith('\n') || section.startsWith('\n') ? output + section : `${output}\n${section}`;
+        }, '');
+      }
+
+      function tokenizeForPreview(text) {
+        const units = parseRubyUnits(normalize(text));
+        const tokens = [];
+        for (let index = 0; index < units.length; index += 1) {
+          const unit = units[index];
+          if (unit.type === 'newline') {
+            tokens.push(unit);
+            continue;
+          }
+          const tcyLength = detectTcyLength(units, index);
+          if (tcyLength > 0) {
+            const chunk = units.slice(index, index + tcyLength);
+            tokens.push({
+              type: 'char',
+              text: chunk.map(item => item.text).join(''),
+              tcy: true,
+              start: chunk[0].start,
+              end: chunk[chunk.length - 1].end
+            });
+            index += tcyLength - 1;
+            continue;
+          }
+          tokens.push(unit);
+        }
+        return tokens;
+      }
+
+      function parseRubyUnits(text) {
+        const units = [];
+        for (let index = 0; index < text.length;) {
+          const char = text[index];
+          if (char === '\n') {
+            units.push({ type: 'newline', text: '\n', start: index, end: index + 1 });
+            index += 1;
+            continue;
+          }
+          if (char === '｜' || char === '|') {
+            const rubyStart = text.indexOf('《', index + 1);
+            const lineBreak = text.indexOf('\n', index + 1);
+            if (rubyStart !== -1 && (lineBreak === -1 || rubyStart < lineBreak)) {
+              const rubyEnd = text.indexOf('》', rubyStart + 1);
+              if (rubyEnd !== -1 && (lineBreak === -1 || rubyEnd < lineBreak)) {
+                const baseText = text.slice(index + 1, rubyStart);
+                const rubyText = text.slice(rubyStart + 1, rubyEnd);
+                if (baseText && rubyText) {
+                  appendRubyUnits(units, baseText, rubyText, index + 1);
+                  index = rubyEnd + 1;
+                  continue;
+                }
+              }
+            }
+          }
+          if (char === '《') {
+            const lineBreak = text.indexOf('\n', index + 1);
+            const rubyEnd = text.indexOf('》', index + 1);
+            if (rubyEnd !== -1 && (lineBreak === -1 || rubyEnd < lineBreak)) {
+              const rubyText = text.slice(index + 1, rubyEnd);
+              const baseUnits = popTrailingKanjiUnits(units);
+              if (rubyText && baseUnits.length) {
+                attachRuby(baseUnits, rubyText);
+                units.push(...baseUnits);
+                index = rubyEnd + 1;
+                continue;
+              }
+            }
+          }
+          const codePoint = text.codePointAt(index);
+          const value = String.fromCodePoint(codePoint);
+          units.push({ type: 'char', text: value, start: index, end: index + value.length });
+          index += value.length;
+        }
+        return units;
+      }
+
+      function appendRubyUnits(units, baseText, rubyText, sourceStart) {
+        const rubyUnits = Array.from(baseText).map((text, offset) => ({
+          type: 'char',
+          text,
+          start: sourceStart + offset,
+          end: sourceStart + offset + text.length
+        }));
+        attachRuby(rubyUnits, rubyText);
+        units.push(...rubyUnits);
+      }
+
+      function attachRuby(units, rubyText) {
+        if (!units.length) return;
+        units[0].rubyText = rubyText;
+        units[0].rubySpan = units.length;
+      }
+
+      function popTrailingKanjiUnits(units) {
+        const popped = [];
+        while (units.length) {
+          const last = units[units.length - 1];
+          if (popped.length >= 2 || last.type !== 'char' || last.rubyText || !/[\p{Script=Han}々〆ヵヶ]/u.test(last.text)) break;
+          popped.unshift(units.pop());
+        }
+        return popped;
+      }
+
+      function detectTcyLength(units, index) {
+        const current = units[index];
+        if (!current || current.type !== 'char' || current.rubyText) return 0;
+        const prev = units[index - 1] || null;
+        const next2 = units.slice(index, index + 2);
+        const next3 = units.slice(index, index + 3);
+        const after2 = units[index + 2] || null;
+        const after3 = units[index + 3] || null;
+        if (
+          next3.length === 3
+          && next3.every(unit => unit.type === 'char' && !unit.rubyText)
+          && /^[A-Za-z0-9.]{3}$/.test(next3.map(unit => unit.text).join(''))
+          && next3.some(unit => unit.text === '.')
+          && !isAsciiDotUnit(prev)
+          && !isAsciiDotUnit(after3)
+        ) return 3;
+        if (
+          next2.length === 2
+          && next2.every(unit => unit.type === 'char' && !unit.rubyText)
+          && /^(?:[A-Za-z0-9]{2}|!\?|!!)$/.test(next2.map(unit => unit.text).join(''))
+          && !isCompactTcyBoundaryUnit(prev)
+          && !isCompactTcyBoundaryUnit(after2)
+        ) return 2;
+        return 0;
+      }
+
+      function isCompactTcyBoundaryUnit(unit) {
+        return Boolean(unit && unit.type === 'char' && /^[A-Za-z0-9!?]$/.test(unit.text));
+      }
+
+      function isAsciiDotUnit(unit) {
+        return Boolean(unit && unit.type === 'char' && /^[A-Za-z0-9.]$/.test(unit.text));
+      }
+
+      function layoutLines(text) {
+        const tokens = tokenizeForPreview(text);
+        const lines = [];
+        let line = [];
+        let start = 0;
+        tokens.forEach((token) => {
+          if (token.type === 'newline') {
+            lines.push({ cells: line, hanging: '', start, end: token.start });
+            line = [];
+            start = token.end;
+            return;
+          }
+          if (line.length >= state.chars) {
+            if ((token.text === '、' || token.text === '。') && !line.hanging) {
+              line.hanging = token;
+              lines.push({ cells: line, hanging: token, start, end: token.end });
+              line = [];
+              start = token.end;
+              return;
+            }
+            lines.push({ cells: line, hanging: '', start, end: token.start });
+            line = [];
+            start = token.start;
+          }
+          line.push(token);
+        });
+        if (line.length || text.endsWith('\n')) {
+          lines.push({ cells: line, hanging: '', start, end: tokens.length ? tokens[tokens.length - 1].end : 0 });
+        }
+        return lines.length ? lines : [{ cells: [], hanging: '', start: 0, end: 0 }];
+      }
+
+      function updateStatus() {
+        const text = getText();
+        const lines = layoutLines(text);
+        statusLabel.textContent = `${text.length}字 / ${lines.length}行`;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          text,
+          fileName: state.fileName,
+          chars: state.chars,
+          lines: state.lines,
+          showLineNumbers: state.showLineNumbers,
+          showPageBreak: state.showPageBreak,
+          showGrid: state.showGrid
+        }));
+      }
+
+      function renderPreviewLine(line) {
+        const cells = line.cells.map((token, index) => {
+          const classes = ['preview-char'];
+          if (token.tcy) classes.push('tcy');
+          const content = token.rubyText
+            ? `<span class="ruby-stack" style="--ruby-span:${token.rubySpan || 1}"><span class="ruby-rt">${escapeHtml(token.rubyText)}</span><span class="ruby-rb">${escapeHtml(token.text)}</span></span>`
+            : escapeHtml(token.text);
+          return `<span class="${classes.join(' ')}" style="top: calc(var(--char-pitch) * ${index})">${content}</span>`;
+        }).join('');
+        const hanging = line.hanging
+          ? `<span class="preview-hanging">${escapeHtml(line.hanging.text)}</span>`
+          : '';
+        return `<div class="preview-line">${cells}${hanging}</div>`;
+      }
+
+      function renderPreview() {
+        const text = getText();
+        const lines = layoutLines(text);
+        const pages = [];
+        for (let index = 0; index < lines.length; index += state.lines) {
+          pages.push(lines.slice(index, index + state.lines));
+        }
+        if (!pages.length) pages.push([]);
+        const spreads = [];
+        for (let index = 0; index < pages.length; index += 2) {
+          spreads.push([pages[index + 1] || null, pages[index] || null]);
+        }
+        previewBody.innerHTML = spreads.map((spread, spreadIndex) => {
+          const pageOffset = spreadIndex * 2;
+          const pageHtml = spread.map((pageLines, sideIndex) => {
+            if (!pageLines) return '<article class="preview-page"><div class="preview-page-head"><span>空白</span></div><div class="preview-viewport"><div class="preview-manuscript"></div></div></article>';
+            const pageNumber = pageOffset + (sideIndex === 0 ? 2 : 1);
+            const body = pageLines.map(renderPreviewLine).join('');
+            return `
+              <article class="preview-page">
+                <div class="preview-page-head"><span>P.${pageNumber}</span><span>${pageLines.length}/${state.lines}行</span></div>
+                <div class="preview-viewport">
+                  <div class="preview-manuscript">${body}</div>
+                </div>
+              </article>
+            `;
+          }).join('');
+          return `
+            <section class="preview-spread">
+              <div class="preview-meta"><span>見開き ${spreadIndex + 1}</span><span>総 ${pages.length}頁 / ${lines.length}行</span></div>
+              <div class="preview-pages">${pageHtml}</div>
+            </section>
+          `;
+        }).join('');
+        previewStatus.textContent = `${pages.length}頁`;
+        preview.classList.add('is-open');
+      }
+
+      function markDirty() {
+        state.dirty = true;
+        updateStatus();
+      }
+
+      async function openDocument() {
+        fileInput.click();
+      }
+
+      async function saveDocument(saveAs = false) {
+        const text = getText();
+        if (!saveAs && state.fileHandle?.createWritable) {
+          const writable = await state.fileHandle.createWritable();
+          await writable.write(text);
+          await writable.close();
+          state.dirty = false;
+          updateStatus();
+          return;
+        }
+        if (window.showSaveFilePicker) {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: state.fileName,
+            types: [{ description: 'Text', accept: { 'text/plain': ['.txt'] } }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(text);
+          await writable.close();
+          state.fileHandle = handle;
+          state.fileName = handle.name || state.fileName;
+          state.dirty = false;
+          applySettings();
+          updateStatus();
+          return;
+        }
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = state.fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      function buildMatcher() {
+        if (!searchInput.value) return null;
+        if (regexToggle.checked) {
+          try {
+            return new RegExp(searchInput.value, 'g');
+          } catch (_error) {
+            return null;
+          }
+        }
+        return new RegExp(searchInput.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+      }
+
+      function replaceAll() {
+        const matcher = buildMatcher();
+        if (!matcher) return;
+        setText(getText().replace(matcher, replaceInput.value));
+        markDirty();
+        pushHistory();
+      }
+
+      function replaceNext() {
+        const matcher = buildMatcher();
+        if (!matcher) return;
+        const text = getText();
+        const startAt = editor.selectionEnd || 0;
+        matcher.lastIndex = startAt;
+        let match = matcher.exec(text);
+        if (!match && startAt > 0) {
+          matcher.lastIndex = 0;
+          match = matcher.exec(text);
+        }
+        if (!match) return;
+        const before = text.slice(0, match.index);
+        const source = match[0];
+        const after = text.slice(match.index + source.length);
+        const replacement = regexToggle.checked
+          ? source.replace(new RegExp(searchInput.value), replaceInput.value)
+          : replaceInput.value;
+        setText(before + replacement + after);
+        const caret = before.length + replacement.length;
+        editor.focus();
+        editor.setSelectionRange(caret, caret);
+        markDirty();
+        pushHistory();
+      }
+
+      function toggleHeading() {
+        const text = getText();
+        const caret = editor.selectionStart || 0;
+        const lineStart = text.lastIndexOf('\n', Math.max(0, caret - 1)) + 1;
+        const lineEndIndex = text.indexOf('\n', caret);
+        const lineEnd = lineEndIndex === -1 ? text.length : lineEndIndex;
+        const line = text.slice(lineStart, lineEnd);
+        const nextLine = line.match(/^#{1,3}\s+/)
+          ? line.replace(/^#{1,3}\s+/, '# ')
+          : `# ${line}`;
+        setText(text.slice(0, lineStart) + nextLine + text.slice(lineEnd));
+        const nextCaret = Math.min(lineStart + nextLine.length, caret + (nextLine.length - line.length));
+        editor.focus();
+        editor.setSelectionRange(nextCaret, nextCaret);
+        markDirty();
+        renderOutline();
+        pushHistory();
+      }
+
+      function handleShortcuts(event) {
+        const modifier = event.metaKey || event.ctrlKey;
+        if (!modifier) return;
+        const key = event.key.toLowerCase();
+        if (key === 'z') {
+          if (document.activeElement !== editor) return;
+          event.preventDefault();
+          if (event.shiftKey) redoEdit();
+          else undoEdit();
+          return;
+        }
+        if (key === 's') {
+          event.preventDefault();
+          saveDocument(event.shiftKey);
+          return;
+        }
+        if (key === 'f') {
+          event.preventDefault();
+          searchInput.focus();
+          searchInput.select();
+          return;
+        }
+        if (key === 'g') {
+          event.preventDefault();
+          replaceNext();
+          return;
+        }
+        if (key === 't') {
+          event.preventDefault();
+          toggleHeading();
+        }
+      }
+
+      document.getElementById('previewButton').addEventListener('click', renderPreview);
+      document.getElementById('closePreviewButton').addEventListener('click', () => preview.classList.remove('is-open'));
+      document.getElementById('newButton').addEventListener('click', () => {
+        if (state.dirty && !confirm('未保存の変更があります。新規原稿にしますか？')) return;
+        state.fileName = '縦書きドラフト.txt';
+        state.fileHandle = null;
+        setText('');
+        state.dirty = false;
+        resetHistory();
+        applySettings();
+        updateStatus();
+      });
+      document.getElementById('openButton').addEventListener('click', openDocument);
+      document.getElementById('saveButton').addEventListener('click', () => saveDocument(false));
+      document.getElementById('saveAsButton').addEventListener('click', () => saveDocument(true));
+      document.getElementById('replaceAllButton').addEventListener('click', replaceAll);
+      document.getElementById('replaceNextButton').addEventListener('click', replaceNext);
+      document.addEventListener('keydown', handleShortcuts);
+      editor.addEventListener('input', () => {
+        markDirty();
+        renderLineRuler();
+        renderOutline();
+        pushHistory();
+      });
+      window.addEventListener('resize', () => {
+        applySettings();
+        updateStatus();
+      });
+      fileNameInput.addEventListener('change', () => {
+        state.fileName = fileNameInput.value.trim() || state.fileName;
+        applySettings();
+        updateStatus();
+      });
+      charsSelect.addEventListener('change', () => {
+        state.chars = Number(charsSelect.value);
+        applySettings();
+        updateStatus();
+      });
+      linesSelect.addEventListener('change', () => {
+        state.lines = Number(linesSelect.value);
+        applySettings();
+        updateStatus();
+      });
+      lineNumberToggle.addEventListener('change', () => {
+        state.showLineNumbers = lineNumberToggle.checked;
+        applySettings();
+        updateStatus();
+      });
+      pageBreakToggle.addEventListener('change', () => {
+        state.showPageBreak = pageBreakToggle.checked;
+        applySettings();
+        updateStatus();
+      });
+      gridToggle.addEventListener('change', () => {
+        state.showGrid = gridToggle.checked;
+        applySettings();
+        updateStatus();
+      });
+      fileInput.addEventListener('change', async event => {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+        setText(await file.text());
+        state.fileName = file.name || state.fileName;
+        state.fileHandle = null;
+        state.dirty = false;
+        fileInput.value = '';
+        resetHistory();
+        applySettings();
+        updateStatus();
+        renderOutline();
+      });
+
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          const data = JSON.parse(saved);
+          setText(data.text || sampleText);
+          state.fileName = data.fileName || state.fileName;
+          state.chars = [39, 40, 41].includes(Number(data.chars)) ? Number(data.chars) : 40;
+          state.lines = Number(data.lines) || state.lines;
+          state.showLineNumbers = data.showLineNumbers !== false;
+          state.showPageBreak = data.showPageBreak !== false;
+          state.showGrid = data.showGrid !== false;
+        } catch (_error) {
+          setText(sampleText);
+        }
+      } else {
+        setText(sampleText);
+      }
+      applySettings();
+      updateStatus();
+      renderOutline();
+      resetHistory();
+      editor.focus();
+    })();
+  </script>
+</body>
+</html>
