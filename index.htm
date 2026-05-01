@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>縦書きドラフト</title>
+  <title>bunko-notepad</title>
   <style>
     :root {
       --bg: #e7e3da;
@@ -520,7 +520,7 @@
       <input id="fileInput" type="file" accept=".txt,.md,.text,text/plain">
 
       <div class="block">
-        <label>ファイル名 <input id="fileNameInput" type="text" value="縦書きドラフト.txt"></label>
+        <label>ファイル名 <input id="fileNameInput" type="text" value="bunko-notepad.txt"></label>
         <label>一行文字数
           <select id="charsSelect">
             <option value="39">39</option>
@@ -606,7 +606,7 @@
       const regexToggle = document.getElementById('regexToggle');
 
       const state = {
-        fileName: '縦書きドラフト.txt',
+        fileName: 'bunko-notepad.txt',
         fileHandle: null,
         chars: 40,
         lines: 15,
@@ -724,7 +724,7 @@
         paper.classList.toggle('show-page-break', state.showPageBreak);
         paper.classList.toggle('show-grid', state.showGrid);
         fileNameInput.value = state.fileName;
-        document.title = state.fileName.replace(/\.txt$/i, '') + ' - 縦書きドラフト';
+        document.title = state.fileName.replace(/\.txt$/i, '') + ' - bunko-notepad';
         renderLineRuler();
         renderOutline();
       }
@@ -1219,7 +1219,7 @@
       document.getElementById('closePreviewButton').addEventListener('click', () => preview.classList.remove('is-open'));
       document.getElementById('newButton').addEventListener('click', () => {
         if (state.dirty && !confirm('未保存の変更があります。新規原稿にしますか？')) return;
-        state.fileName = '縦書きドラフト.txt';
+        state.fileName = 'bunko-notepad.txt';
         state.fileHandle = null;
         setText('');
         state.dirty = false;
