@@ -526,12 +526,15 @@
 
     .emphasis-dot {
       position: absolute;
-      right: calc(var(--char-pitch) * -0.2);
+      right: calc(var(--char-pitch) * -0.32);
       top: 50%;
-      width: 0.28em;
-      height: 0.28em;
-      border-radius: 999px;
-      background: currentColor;
+      width: 1em;
+      height: 1em;
+      display: grid;
+      place-items: center;
+      font-family: var(--font-body);
+      font-size: max(7px, calc(var(--font-size) * 0.34));
+      line-height: 1;
       transform: translateY(-50%);
     }
   </style>
@@ -1117,7 +1120,7 @@
           const content = token.rubyText
             ? `<span class="ruby-stack" style="--ruby-span:${token.rubySpan || 1}"><span class="ruby-rt">${renderRubyText(token)}</span><span class="ruby-rb">${escapeHtml(token.text)}</span></span>`
             : token.emphasis
-              ? `<span class="emphasis-stack"><span class="emphasis-dot" aria-hidden="true"></span><span>${escapeHtml(token.text)}</span></span>`
+              ? `<span class="emphasis-stack"><span class="emphasis-dot" aria-hidden="true">﹅</span><span>${escapeHtml(token.text)}</span></span>`
             : escapeHtml(token.text);
           return `<span class="${classes.join(' ')}" style="top: calc(var(--char-pitch) * ${index})">${content}</span>`;
         }).join('');
