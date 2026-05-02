@@ -372,22 +372,28 @@
     }
 
     .preview.is-open {
-      display: grid;
-      grid-template-rows: auto 1fr;
+      display: block;
     }
 
     .preview-head {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      z-index: 2;
       display: flex;
       gap: 8px;
       align-items: center;
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--line);
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
       background: var(--bar);
+      box-shadow: 0 8px 24px rgba(36, 33, 29, 0.12);
     }
 
     .preview-body {
+      height: 100vh;
       overflow: auto;
-      padding: 24px;
+      padding: 16px 92px 16px 16px;
       background: var(--bg);
     }
 
