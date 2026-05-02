@@ -1149,7 +1149,8 @@
             : token.emphasis
               ? `<span class="emphasis-stack"><span class="emphasis-dot" aria-hidden="true">﹅</span><span>${escapeHtml(token.text)}</span></span>`
             : escapeHtml(token.text);
-          return `<span class="${classes.join(' ')}" style="top: calc(var(--char-pitch) * ${index})">${content}</span>`;
+          const top = token.headingLevel ? index * 1.28 : index;
+          return `<span class="${classes.join(' ')}" style="top: calc(var(--char-pitch) * ${top})">${content}</span>`;
         }).join('');
         const hanging = line.hanging
           ? `<span class="preview-hanging">${escapeHtml(line.hanging.text)}</span>`
