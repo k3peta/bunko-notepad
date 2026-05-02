@@ -586,6 +586,7 @@
         <label>置換 <input id="replaceInput" type="text"></label>
         <label class="field"><input id="regexToggle" type="checkbox"> 検索語を正規表現として扱う</label>
         <div class="drawer-grid">
+          <button id="findNextButton">検索</button>
           <button id="replaceNextButton">置換検索</button>
           <button id="replaceAllButton">全置換</button>
         </div>
@@ -1261,9 +1262,26 @@
       function replaceAll() {
         const matcher = buildMatcher();
         if (!matcher) return;
+        if (replaceInput.value === '' && !confirm('置換欄が空です。一致箇所を削除しますか？')) return;
         setText(getText().replace(matcher, replaceInput.value));
         markDirty();
         pushHistory();
+      }
+
+      function findNext() {
+        const matcher = buildMatcher();
+        if (!matcher) return;
+        const text = getText();
+        const startAt = editor.selectionEnd || 0;
+        matcher.lastIndex = startAt;
+        let match = matcher.exec(text);
+        if (!match && startAt > 0) {
+          matcher.lastIndex = 0;
+          match = matcher.exec(text);
+        }
+        if (!match) return;
+        editor.focus();
+        editor.setSelectionRange(match.index, match.index + match[0].length);
       }
 
       function replaceNext() {
@@ -1369,6 +1387,7 @@
       document.getElementById('openButton').addEventListener('click', openDocument);
       document.getElementById('saveButton').addEventListener('click', () => saveDocument(false));
       document.getElementById('saveAsButton').addEventListener('click', () => saveDocument(true));
+      document.getElementById('findNextButton').addEventListener('click', findNext);
       document.getElementById('replaceAllButton').addEventListener('click', replaceAll);
       document.getElementById('replaceNextButton').addEventListener('click', replaceNext);
       document.addEventListener('keydown', handleShortcuts);
