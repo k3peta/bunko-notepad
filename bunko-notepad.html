@@ -377,17 +377,23 @@
 
     .preview-head {
       position: absolute;
-      top: 16px;
+      top: 0;
       right: 16px;
       z-index: 2;
       display: flex;
-      gap: 8px;
+      gap: 6px;
       align-items: center;
-      padding: 8px;
+      padding: 4px 6px;
       border: 1px solid var(--line);
-      border-radius: 6px;
+      border-radius: 0 0 5px 5px;
       background: var(--bar);
       box-shadow: 0 8px 24px rgba(36, 33, 29, 0.12);
+      font-size: 75%;
+    }
+
+    .preview-head button {
+      height: 24px;
+      padding: 2px 7px;
     }
 
     .preview-body {
