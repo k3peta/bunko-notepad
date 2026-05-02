@@ -393,22 +393,13 @@
     .preview-body {
       height: 100vh;
       overflow: auto;
-      padding: 16px 92px 16px 16px;
+      padding: 8px 92px 12px 12px;
       background: var(--bg);
     }
 
     .preview-spread {
       width: max-content;
-      margin: 0 auto 24px;
-    }
-
-    .preview-meta {
-      display: flex;
-      justify-content: space-between;
-      gap: 24px;
-      margin-bottom: 10px;
-      color: var(--muted);
-      font-size: 12px;
+      margin: 0 auto 16px;
     }
 
     .preview-pages {
@@ -1193,12 +1184,11 @@
           }).join('');
           return `
             <section class="preview-spread">
-              <div class="preview-meta"><span>見開き ${spreadIndex + 1}</span><span>総 ${pages.length}頁 / ${lines.length}行</span></div>
               <div class="preview-pages">${pageHtml}</div>
             </section>
           `;
         }).join('');
-        previewStatus.textContent = `${pages.length}頁`;
+        previewStatus.textContent = `見開き 1/${spreads.length}　総 ${pages.length}頁 / ${lines.length}行`;
         preview.classList.add('is-open');
       }
 
