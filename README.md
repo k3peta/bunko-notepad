@@ -6,9 +6,7 @@
 
 ## 起動
 
-`index.htm` をブラウザで開きます。
-
-`index.html` は `index.htm` へのシンボリックリンクです。
+`bunko-notepad.html` をブラウザで開きます。
 
 ## 主な機能
 
