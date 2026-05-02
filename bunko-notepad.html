@@ -1114,6 +1114,11 @@
         preview.classList.add('is-open');
       }
 
+      function closePreview() {
+        preview.classList.remove('is-open');
+        editor.focus();
+      }
+
       function markDirty() {
         state.dirty = true;
         updateStatus();
@@ -1223,6 +1228,11 @@
       }
 
       function handleShortcuts(event) {
+        if (event.key === 'Escape' && preview.classList.contains('is-open')) {
+          event.preventDefault();
+          closePreview();
+          return;
+        }
         const modifier = event.metaKey || event.ctrlKey;
         if (!modifier) return;
         const key = event.key.toLowerCase();
@@ -1244,6 +1254,11 @@
           searchInput.select();
           return;
         }
+        if (key === 'p') {
+          event.preventDefault();
+          renderPreview();
+          return;
+        }
         if (key === 'g') {
           event.preventDefault();
           replaceNext();
@@ -1256,7 +1271,7 @@
       }
 
       document.getElementById('previewButton').addEventListener('click', renderPreview);
-      document.getElementById('closePreviewButton').addEventListener('click', () => preview.classList.remove('is-open'));
+      document.getElementById('closePreviewButton').addEventListener('click', closePreview);
       document.getElementById('newButton').addEventListener('click', () => {
         if (state.dirty && !confirm('未保存の変更があります。新規原稿にしますか？')) return;
         state.fileName = 'bunko-notepad.txt';

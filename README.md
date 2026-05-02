@@ -65,6 +65,8 @@
 - `Cmd+S` / `Ctrl+S`: 保存
 - `Cmd+Shift+S` / `Ctrl+Shift+S`: 別名保存
 - `Cmd+F` / `Ctrl+F`: 検索欄へ移動
+- `Cmd+P` / `Ctrl+P`: プレビュー
+- `Esc`: プレビューを閉じて本文編集に戻る
 - `Cmd+G` / `Ctrl+G`: 次の一致を1件置換
 - `Cmd+Z` / `Ctrl+Z`: 戻る
 - `Cmd+Shift+Z` / `Ctrl+Shift+Z`: やり直し
