@@ -170,14 +170,14 @@
 
     .line-ruler {
       position: absolute;
-      top: 6px;
+      top: 4px;
       right: var(--page-padding);
       z-index: 4;
       width: calc(var(--line-pitch) * var(--lines));
       height: var(--ruler-height);
       overflow: hidden;
       color: rgba(111, 106, 97, 0.78);
-      font-size: 10px;
+      font-size: 9px;
       line-height: 1;
       user-select: none;
     }
@@ -707,8 +707,11 @@
 
       function applySettings() {
         const paper = document.querySelector('.paper');
-        const available = Math.max(240, editor.clientHeight || (paper.clientHeight - 56));
-        const charPitch = available / state.chars;
+        const rootStyle = getComputedStyle(document.documentElement);
+        const pagePadding = parseFloat(rootStyle.getPropertyValue('--page-padding')) || 28;
+        const reservedRows = state.showLineNumbers ? 1 : 0;
+        const available = Math.max(240, paper.clientHeight - pagePadding * 2);
+        const charPitch = available / (state.chars + reservedRows);
         const fontSize = Math.max(6, charPitch);
         document.documentElement.style.setProperty('--chars', state.chars);
         document.documentElement.style.setProperty('--lines', state.lines);
