@@ -505,6 +505,16 @@
       line-height: 1;
       color: var(--muted);
     }
+
+    .ruby-rt-char {
+      position: absolute;
+      top: calc((var(--char-pitch) * (var(--ruby-span, 1) - 1)) * var(--ruby-pos, 0));
+      left: 0;
+      width: 1em;
+      height: 1em;
+      display: grid;
+      place-items: center;
+    }
   </style>
 </head>
 <body>
@@ -977,36 +987,63 @@
         return Boolean(unit && unit.type === 'char' && /^[A-Za-z0-9.]$/.test(unit.text));
       }
 
+      function isHangingPunctuation(token) {
+        return Boolean(token && token.type === 'char' && /^[、。！？!?）」』】〕〉》〙〗〟’”]$/.test(token.text));
+      }
+
       function layoutLines(text) {
         const tokens = tokenizeForPreview(text);
         const lines = [];
         let line = [];
         let start = 0;
+        let skipNewlineAt = -1;
+        let ignoredTrailingNewline = false;
         tokens.forEach((token) => {
           if (token.type === 'newline') {
+            if (!line.length && token.start === skipNewlineAt) {
+              start = token.end;
+              skipNewlineAt = -1;
+              ignoredTrailingNewline = true;
+              return;
+            }
             lines.push({ cells: line, hanging: '', start, end: token.start });
             line = [];
             start = token.end;
+            skipNewlineAt = -1;
+            ignoredTrailingNewline = false;
             return;
           }
           if (line.length >= state.chars) {
-            if ((token.text === '、' || token.text === '。') && !line.hanging) {
+            if (isHangingPunctuation(token) && !line.hanging) {
               line.hanging = token;
               lines.push({ cells: line, hanging: token, start, end: token.end });
               line = [];
               start = token.end;
+              skipNewlineAt = token.end;
               return;
             }
             lines.push({ cells: line, hanging: '', start, end: token.start });
             line = [];
             start = token.start;
+            skipNewlineAt = -1;
           }
           line.push(token);
+          skipNewlineAt = -1;
+          ignoredTrailingNewline = false;
         });
-        if (line.length || text.endsWith('\n')) {
+        if (line.length || (text.endsWith('\n') && !ignoredTrailingNewline)) {
           lines.push({ cells: line, hanging: '', start, end: tokens.length ? tokens[tokens.length - 1].end : 0 });
         }
         return lines.length ? lines : [{ cells: [], hanging: '', start: 0, end: 0 }];
+      }
+
+      function renderRubyText(token) {
+        const chars = Array.from(token.rubyText || '');
+        const denominator = Math.max(1, chars.length - 1);
+        return chars.map((char, index) => {
+          const pos = chars.length <= 1 ? 0.5 : index / denominator;
+          return `<span class="ruby-rt-char" style="--ruby-pos:${pos}">${escapeHtml(char)}</span>`;
+        }).join('');
       }
 
       function updateStatus() {
@@ -1029,7 +1066,7 @@
           const classes = ['preview-char'];
           if (token.tcy) classes.push('tcy');
           const content = token.rubyText
-            ? `<span class="ruby-stack" style="--ruby-span:${token.rubySpan || 1}"><span class="ruby-rt">${escapeHtml(token.rubyText)}</span><span class="ruby-rb">${escapeHtml(token.text)}</span></span>`
+            ? `<span class="ruby-stack" style="--ruby-span:${token.rubySpan || 1}"><span class="ruby-rt">${renderRubyText(token)}</span><span class="ruby-rb">${escapeHtml(token.text)}</span></span>`
             : escapeHtml(token.text);
           return `<span class="${classes.join(' ')}" style="top: calc(var(--char-pitch) * ${index})">${content}</span>`;
         }).join('');
