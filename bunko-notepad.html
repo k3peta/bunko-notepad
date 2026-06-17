@@ -557,6 +557,7 @@
         <button id="openButton">開く</button>
         <button class="primary" id="saveButton">保存</button>
         <button id="saveAsButton">別名保存</button>
+        <button id="saveSjisButton">S_JIS書き出し</button>
       </div>
       <input id="fileInput" type="file" accept=".txt,.md,.text,text/plain">
 
@@ -648,6 +649,7 @@
       const searchInput = document.getElementById('searchInput');
       const replaceInput = document.getElementById('replaceInput');
       const regexToggle = document.getElementById('regexToggle');
+      let shiftJisEncodeMap = null;
 
       const state = {
         fileName: 'bunko-notepad.txt',
@@ -1249,6 +1251,115 @@
         URL.revokeObjectURL(url);
       }
 
+      function getShiftJisEncodeMap() {
+        if (shiftJisEncodeMap) return shiftJisEncodeMap;
+        const decoder = new TextDecoder('shift_jis', { fatal: true });
+        const map = new Map();
+        const add = (bytes) => {
+          try {
+            const decoded = decoder.decode(new Uint8Array(bytes));
+            if (!decoded || decoded.includes('\uFFFD')) return;
+            if (Array.from(decoded).length !== 1) return;
+            if (!map.has(decoded)) map.set(decoded, bytes);
+          } catch (_error) {
+            // Invalid byte sequence for Shift_JIS.
+          }
+        };
+        for (let byte = 0x00; byte <= 0x7f; byte += 1) add([byte]);
+        for (let byte = 0xa1; byte <= 0xdf; byte += 1) add([byte]);
+        const leads = [
+          ...range(0x81, 0x9f),
+          ...range(0xe0, 0xfc)
+        ];
+        const trails = [
+          ...range(0x40, 0x7e),
+          ...range(0x80, 0xfc)
+        ];
+        leads.forEach((lead) => {
+          trails.forEach((trail) => add([lead, trail]));
+        });
+        shiftJisEncodeMap = map;
+        return map;
+      }
+
+      function range(start, end) {
+        return Array.from({ length: end - start + 1 }, (_item, index) => start + index);
+      }
+
+      function toCodePointLabel(char) {
+        return `U+${char.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}`;
+      }
+
+      function buildShiftJisExportText(text) {
+        const map = getShiftJisEncodeMap();
+        const replacementChar = map.has('■') ? '■' : '?';
+        const replacements = new Map();
+        let converted = '';
+        Array.from(text).forEach((char) => {
+          if (map.has(char)) {
+            converted += char;
+            return;
+          }
+          const label = toCodePointLabel(char);
+          replacements.set(label, (replacements.get(label) || 0) + 1);
+          converted += replacementChar;
+        });
+        if (!replacements.size) return converted;
+        const lines = [
+          '',
+          '',
+          '---- S_JIS書き出し時の置換文字一覧 ----',
+          `S_JISで表現できない文字を「${replacementChar}」に置換しました。`,
+          '元の文字はUnicode番号で記録しています。',
+          ...Array.from(replacements.entries()).map(([label, count]) => `${label} : ${count}箇所`)
+        ];
+        return converted + lines.join('\n');
+      }
+
+      function encodeShiftJis(text) {
+        const map = getShiftJisEncodeMap();
+        const bytes = [];
+        Array.from(text).forEach((char) => {
+          const encoded = map.get(char) || map.get('■') || map.get('?');
+          bytes.push(...encoded);
+        });
+        return new Uint8Array(bytes);
+      }
+
+      async function saveShiftJisDocument() {
+        if (!window.TextDecoder) {
+          alert('このブラウザではS_JIS変換に対応できません。');
+          return;
+        }
+        let exportText;
+        let bytes;
+        try {
+          exportText = buildShiftJisExportText(getText());
+          bytes = encodeShiftJis(exportText);
+        } catch (_error) {
+          alert('このブラウザではS_JIS変換に対応できません。');
+          return;
+        }
+        const suggestedName = state.fileName.replace(/\.[^.]*$/, '') + '_sjis.txt';
+        if (window.showSaveFilePicker) {
+          const handle = await window.showSaveFilePicker({
+            suggestedName,
+            types: [{ description: 'Shift_JIS Text', accept: { 'text/plain': ['.txt'] } }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(bytes);
+          await writable.close();
+          return;
+        }
+        const blob = new Blob([bytes], { type: 'text/plain;charset=shift_jis' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = suggestedName;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
       function buildMatcher() {
         if (!searchInput.value) return null;
         if (regexToggle.checked) {
@@ -1389,6 +1500,7 @@
       document.getElementById('openButton').addEventListener('click', openDocument);
       document.getElementById('saveButton').addEventListener('click', () => saveDocument(false));
       document.getElementById('saveAsButton').addEventListener('click', () => saveDocument(true));
+      document.getElementById('saveSjisButton').addEventListener('click', saveShiftJisDocument);
       document.getElementById('findNextButton').addEventListener('click', findNext);
       document.getElementById('replaceAllButton').addEventListener('click', replaceAll);
       document.getElementById('replaceNextButton').addEventListener('click', replaceNext);
