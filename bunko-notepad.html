@@ -173,7 +173,7 @@
       top: 4px;
       right: var(--page-padding);
       z-index: 4;
-      width: calc(var(--line-pitch) * var(--lines));
+      width: calc(var(--line-pitch) * var(--lines) * 2);
       height: var(--ruler-height);
       overflow: hidden;
       color: rgba(111, 106, 97, 0.78);
@@ -196,6 +196,11 @@
     .line-ruler span {
       flex: 0 0 var(--line-pitch);
       text-align: center;
+    }
+
+    .line-ruler span.is-current {
+      color: var(--accent);
+      font-weight: 700;
     }
 
     #editor {
@@ -630,6 +635,8 @@
   <script>
     (() => {
       const STORAGE_KEY = 'bunko-simple-draft';
+      const HISTORY_MAX_ENTRIES = 500;
+      const HISTORY_MAX_TEXT_UNITS = 8_000_000;
       const editor = document.getElementById('editor');
       const preview = document.getElementById('preview');
       const previewBody = document.getElementById('previewBody');
@@ -665,6 +672,8 @@
       let history = [];
       let historyIndex = -1;
       let restoringHistory = false;
+      let autosaveFailed = false;
+      let lastSearchMatch = null;
 
       const sampleText = [
         '# 使い方',
@@ -718,6 +727,19 @@
         history = history.slice(0, historyIndex + 1);
         history.push(next);
         historyIndex = history.length - 1;
+        trimHistory();
+      }
+
+      function trimHistory() {
+        let textUnits = history.reduce((total, entry) => total + entry.text.length, 0);
+        while (
+          history.length > 1
+          && (history.length > HISTORY_MAX_ENTRIES || textUnits > HISTORY_MAX_TEXT_UNITS)
+        ) {
+          textUnits -= history[0].text.length;
+          history.shift();
+          historyIndex -= 1;
+        }
       }
 
       function resetHistory() {
@@ -779,8 +801,19 @@
       }
 
       function renderLineRuler() {
-        lineRulerTrack.innerHTML = Array.from({ length: state.lines }, (_item, index) => {
-          return `<span>${index + 1}</span>`;
+        const lines = layoutLines(getText());
+        const caret = editor.selectionStart || 0;
+        let currentLine = lines.findIndex((line) => {
+          if (line.start === line.end) return caret === line.start;
+          return caret >= line.start && caret < line.end;
+        });
+        if (currentLine < 0) currentLine = Math.max(0, lines.length - 1);
+        const spreadLines = state.lines * 2;
+        const spreadStart = Math.floor(currentLine / spreadLines) * spreadLines;
+        lineRulerTrack.innerHTML = Array.from({ length: spreadLines }, (_item, index) => {
+          const lineIndex = spreadStart + index;
+          const className = lineIndex === currentLine ? ' class="is-current"' : '';
+          return `<span${className}>${lineIndex + 1}</span>`;
         }).join('');
       }
 
@@ -875,10 +908,11 @@
         const moved = sections.splice(fromIndex, 1)[0];
         sections.splice(toIndex, 0, moved);
         setText(prefix + joinSections(sections));
-        editor.setSelectionRange(headings[toIndex].start, headings[toIndex].start);
-        markDirty();
-        pushHistory();
-        renderOutline();
+        const reorderedHeadings = extractHeadings(getText());
+        const movedHeading = reorderedHeadings[toIndex];
+        const caret = movedHeading ? movedHeading.start : 0;
+        editor.setSelectionRange(caret, caret);
+        commitProgrammaticEdit();
       }
 
       function joinSections(sections) {
@@ -1077,10 +1111,15 @@
         return Boolean(token && token.type === 'char' && /^[、。！？!?）」』】〕〉》〙〗〟’”]$/.test(token.text));
       }
 
+      function tokenAdvance(token) {
+        return token && token.headingLevel ? 1.5 : 1;
+      }
+
       function layoutLines(text) {
         const tokens = tokenizeForPreview(text);
         const lines = [];
         let line = [];
+        let lineAdvance = 0;
         let start = 0;
         let skipNewlineAt = -1;
         let ignoredTrailingNewline = false;
@@ -1094,26 +1133,31 @@
             }
             lines.push({ cells: line, hanging: '', start, end: token.start });
             line = [];
+            lineAdvance = 0;
             start = token.end;
             skipNewlineAt = -1;
             ignoredTrailingNewline = false;
             return;
           }
-          if (line.length >= state.chars) {
-            if (isHangingPunctuation(token) && !line.hanging) {
+          const advance = tokenAdvance(token);
+          if (line.length && lineAdvance + advance > state.chars) {
+            if (isHangingPunctuation(token) && lineAdvance >= state.chars && !line.hanging) {
               line.hanging = token;
               lines.push({ cells: line, hanging: token, start, end: token.end });
               line = [];
+              lineAdvance = 0;
               start = token.end;
               skipNewlineAt = token.end;
               return;
             }
             lines.push({ cells: line, hanging: '', start, end: token.start });
             line = [];
+            lineAdvance = 0;
             start = token.start;
             skipNewlineAt = -1;
           }
           line.push(token);
+          lineAdvance += advance;
           skipNewlineAt = -1;
           ignoredTrailingNewline = false;
         });
@@ -1135,20 +1179,27 @@
       function updateStatus() {
         const text = getText();
         const lines = layoutLines(text);
-        statusLabel.textContent = `${text.length}字 / ${lines.length}行`;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          text,
-          fileName: state.fileName,
-          chars: state.chars,
-          lines: state.lines,
-          showLineNumbers: state.showLineNumbers,
-          showPageBreak: state.showPageBreak,
-          showGrid: state.showGrid
-        }));
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            text,
+            fileName: state.fileName,
+            chars: state.chars,
+            lines: state.lines,
+            showLineNumbers: state.showLineNumbers,
+            showPageBreak: state.showPageBreak,
+            showGrid: state.showGrid
+          }));
+          autosaveFailed = false;
+        } catch (_error) {
+          autosaveFailed = true;
+        }
+        const warning = autosaveFailed ? ' / 自動保存不可' : '';
+        statusLabel.textContent = `${Array.from(text).length}字 / ${lines.length}行${warning}`;
       }
 
       function renderPreviewLine(line) {
-        const cells = line.cells.map((token, index) => {
+        let offset = 0;
+        const cells = line.cells.map((token) => {
           const classes = ['preview-char'];
           if (token.tcy) classes.push('tcy');
           if (token.headingLevel) classes.push('heading');
@@ -1157,7 +1208,8 @@
             : token.emphasis
               ? `<span class="emphasis-stack"><span class="emphasis-dot" aria-hidden="true">﹅</span><span>${escapeHtml(token.text)}</span></span>`
             : escapeHtml(token.text);
-          const top = token.headingLevel ? index * 1.5 : index;
+          const top = offset;
+          offset += tokenAdvance(token);
           return `<span class="${classes.join(' ')}" style="top: calc(var(--char-pitch) * ${top})">${content}</span>`;
         }).join('');
         const hanging = line.hanging
@@ -1213,42 +1265,64 @@
         updateStatus();
       }
 
+      function isAbortError(error) {
+        return Boolean(error && error.name === 'AbortError');
+      }
+
       async function openDocument() {
+        if (state.dirty && !confirm('未保存の変更があります。別の原稿を開きますか？')) return;
         fileInput.click();
       }
 
+      async function readTextFile(file) {
+        if (!window.TextDecoder) return normalize(await file.text());
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        try {
+          return normalize(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+        } catch (_utf8Error) {
+          return normalize(new TextDecoder('shift_jis', { fatal: true }).decode(bytes));
+        }
+      }
+
       async function saveDocument(saveAs = false) {
-        const text = getText();
-        if (!saveAs && state.fileHandle?.createWritable) {
-          const writable = await state.fileHandle.createWritable();
-          await writable.write(text);
-          await writable.close();
+        try {
+          const text = getText();
+          if (!saveAs && state.fileHandle?.createWritable) {
+            const writable = await state.fileHandle.createWritable();
+            await writable.write(text);
+            await writable.close();
+            state.dirty = false;
+            updateStatus();
+            return;
+          }
+          if (window.showSaveFilePicker) {
+            const handle = await window.showSaveFilePicker({
+              suggestedName: state.fileName,
+              types: [{ description: 'Text', accept: { 'text/plain': ['.txt'] } }]
+            });
+            const writable = await handle.createWritable();
+            await writable.write(text);
+            await writable.close();
+            state.fileHandle = handle;
+            state.fileName = handle.name || state.fileName;
+            state.dirty = false;
+            applySettings();
+            updateStatus();
+            return;
+          }
+          const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = state.fileName;
+          a.click();
+          URL.revokeObjectURL(url);
           state.dirty = false;
           updateStatus();
-          return;
+        } catch (error) {
+          if (isAbortError(error)) return;
+          alert('保存できませんでした。保存先とブラウザの権限を確認してください。');
         }
-        if (window.showSaveFilePicker) {
-          const handle = await window.showSaveFilePicker({
-            suggestedName: state.fileName,
-            types: [{ description: 'Text', accept: { 'text/plain': ['.txt'] } }]
-          });
-          const writable = await handle.createWritable();
-          await writable.write(text);
-          await writable.close();
-          state.fileHandle = handle;
-          state.fileName = handle.name || state.fileName;
-          state.dirty = false;
-          applySettings();
-          updateStatus();
-          return;
-        }
-        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = state.fileName;
-        a.click();
-        URL.revokeObjectURL(url);
       }
 
       function getShiftJisEncodeMap() {
@@ -1340,24 +1414,29 @@
           alert('このブラウザではS_JIS変換に対応できません。');
           return;
         }
-        const suggestedName = state.fileName.replace(/\.[^.]*$/, '') + '_sjis.txt';
-        if (window.showSaveFilePicker) {
-          const handle = await window.showSaveFilePicker({
-            suggestedName,
-            types: [{ description: 'Shift_JIS Text', accept: { 'text/plain': ['.txt'] } }]
-          });
-          const writable = await handle.createWritable();
-          await writable.write(bytes);
-          await writable.close();
-          return;
+        try {
+          const suggestedName = state.fileName.replace(/\.[^.]*$/, '') + '_sjis.txt';
+          if (window.showSaveFilePicker) {
+            const handle = await window.showSaveFilePicker({
+              suggestedName,
+              types: [{ description: 'Shift_JIS Text', accept: { 'text/plain': ['.txt'] } }]
+            });
+            const writable = await handle.createWritable();
+            await writable.write(bytes);
+            await writable.close();
+            return;
+          }
+          const blob = new Blob([bytes], { type: 'text/plain;charset=shift_jis' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = suggestedName;
+          a.click();
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          if (isAbortError(error)) return;
+          alert('S_JISファイルを書き出せませんでした。');
         }
-        const blob = new Blob([bytes], { type: 'text/plain;charset=shift_jis' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = suggestedName;
-        a.click();
-        URL.revokeObjectURL(url);
       }
 
       function buildMatcher() {
@@ -1366,61 +1445,152 @@
           try {
             return new RegExp(searchInput.value, 'g');
           } catch (_error) {
+            alert('正規表現が正しくありません。');
             return null;
           }
         }
         return new RegExp(searchInput.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
       }
 
+      function getSearchKey() {
+        return `${regexToggle.checked ? 'regex' : 'text'}:${searchInput.value}`;
+      }
+
+      function nextTextIndex(text, index) {
+        if (index >= text.length) return text.length + 1;
+        return index + (text.codePointAt(index) > 0xffff ? 2 : 1);
+      }
+
+      function getNextMatch(matcher, text, startAt) {
+        matcher.lastIndex = Math.min(startAt, text.length);
+        let match = startAt <= text.length ? matcher.exec(text) : null;
+        if (!match && startAt > 0) {
+          matcher.lastIndex = 0;
+          match = matcher.exec(text);
+        }
+        return match;
+      }
+
+      function expandRegexReplacement(template, match, text) {
+        return template.replace(/\$(\$|&|`|'|<[^>]+>|\d{1,2})/g, (whole, token) => {
+          if (token === '$') return '$';
+          if (token === '&') return match[0];
+          if (token === '`') return text.slice(0, match.index);
+          if (token === "'") return text.slice(match.index + match[0].length);
+          if (token.startsWith('<')) {
+            if (!match.groups) return whole;
+            return match.groups[token.slice(1, -1)] || '';
+          }
+          let captureIndex = Number(token);
+          if (captureIndex > 0 && captureIndex < match.length) return match[captureIndex] || '';
+          if (token.length === 2) {
+            captureIndex = Number(token[0]);
+            if (captureIndex > 0 && captureIndex < match.length) {
+              return (match[captureIndex] || '') + token[1];
+            }
+          }
+          return whole;
+        });
+      }
+
+      function commitProgrammaticEdit() {
+        lastSearchMatch = null;
+        markDirty();
+        renderLineRuler();
+        renderOutline();
+        pushHistory();
+      }
+
       function replaceAll() {
         const matcher = buildMatcher();
         if (!matcher) return;
         if (replaceInput.value === '' && !confirm('置換欄が空です。一致箇所を削除しますか？')) return;
-        setText(getText().replace(matcher, replaceInput.value));
-        markDirty();
-        pushHistory();
+        const text = getText();
+        const replaced = text.replace(matcher, replaceInput.value);
+        if (replaced === text) return;
+        setText(replaced);
+        commitProgrammaticEdit();
       }
 
       function findNext() {
         const matcher = buildMatcher();
         if (!matcher) return;
         const text = getText();
-        const startAt = editor.selectionEnd || 0;
-        matcher.lastIndex = startAt;
-        let match = matcher.exec(text);
-        if (!match && startAt > 0) {
-          matcher.lastIndex = 0;
-          match = matcher.exec(text);
+        const key = getSearchKey();
+        let startAt = editor.selectionEnd || 0;
+        if (
+          lastSearchMatch
+          && lastSearchMatch.key === key
+          && editor.selectionStart === lastSearchMatch.start
+          && editor.selectionEnd === lastSearchMatch.end
+        ) {
+          startAt = lastSearchMatch.start === lastSearchMatch.end
+            ? nextTextIndex(text, lastSearchMatch.end)
+            : lastSearchMatch.end;
         }
+        const match = getNextMatch(matcher, text, startAt);
         if (!match) return;
+        if (
+          lastSearchMatch
+          && lastSearchMatch.key === key
+          && match.index === lastSearchMatch.start
+          && match.index + match[0].length === lastSearchMatch.end
+        ) return;
         editor.focus();
         editor.setSelectionRange(match.index, match.index + match[0].length);
+        lastSearchMatch = {
+          key,
+          start: match.index,
+          end: match.index + match[0].length
+        };
+        renderLineRuler();
       }
 
       function replaceNext() {
         const matcher = buildMatcher();
         if (!matcher) return;
         const text = getText();
-        const startAt = editor.selectionEnd || 0;
-        matcher.lastIndex = startAt;
+        const key = getSearchKey();
+        const selectionStart = editor.selectionStart || 0;
+        const selectionEnd = editor.selectionEnd || 0;
+        matcher.lastIndex = selectionStart;
         let match = matcher.exec(text);
-        if (!match && startAt > 0) {
-          matcher.lastIndex = 0;
-          match = matcher.exec(text);
+        const selectionIsMatch = match
+          && match.index === selectionStart
+          && match.index + match[0].length === selectionEnd;
+        const selectionIsLastSearch = lastSearchMatch
+          && lastSearchMatch.key === key
+          && lastSearchMatch.start === selectionStart
+          && lastSearchMatch.end === selectionEnd;
+        if (!selectionIsMatch || (selectionStart === selectionEnd && !selectionIsLastSearch)) {
+          match = getNextMatch(matcher, text, selectionEnd);
         }
         if (!match) return;
         const before = text.slice(0, match.index);
         const source = match[0];
         const after = text.slice(match.index + source.length);
         const replacement = regexToggle.checked
-          ? source.replace(new RegExp(searchInput.value), replaceInput.value)
+          ? expandRegexReplacement(replaceInput.value, match, text)
           : replaceInput.value;
+        if (source === '' && replacement === '') {
+          lastSearchMatch = {
+            key,
+            start: match.index,
+            end: match.index
+          };
+          findNext();
+          return;
+        }
         setText(before + replacement + after);
         const caret = before.length + replacement.length;
         editor.focus();
         editor.setSelectionRange(caret, caret);
-        markDirty();
-        pushHistory();
+        if (source === replacement) {
+          lastSearchMatch = { key, start: match.index, end: caret };
+          renderLineRuler();
+          return;
+        }
+        commitProgrammaticEdit();
       }
 
       function toggleHeading() {
@@ -1437,9 +1607,7 @@
         const nextCaret = Math.min(lineStart + nextLine.length, caret + (nextLine.length - line.length));
         editor.focus();
         editor.setSelectionRange(nextCaret, nextCaret);
-        markDirty();
-        renderOutline();
-        pushHistory();
+        commitProgrammaticEdit();
       }
 
       function handleShortcuts(event) {
@@ -1506,20 +1674,28 @@
       document.getElementById('replaceNextButton').addEventListener('click', replaceNext);
       document.addEventListener('keydown', handleShortcuts);
       editor.addEventListener('input', () => {
+        lastSearchMatch = null;
         markDirty();
         renderLineRuler();
         renderOutline();
         pushHistory();
+      });
+      ['click', 'keyup', 'select'].forEach((eventName) => {
+        editor.addEventListener(eventName, renderLineRuler);
       });
       window.addEventListener('resize', () => {
         applySettings();
         updateStatus();
       });
       fileNameInput.addEventListener('change', () => {
-        state.fileName = fileNameInput.value.trim() || state.fileName;
+        const nextName = fileNameInput.value.trim() || state.fileName;
+        if (state.fileHandle && nextName !== state.fileHandle.name) state.fileHandle = null;
+        state.fileName = nextName;
         applySettings();
         updateStatus();
       });
+      searchInput.addEventListener('input', () => { lastSearchMatch = null; });
+      regexToggle.addEventListener('change', () => { lastSearchMatch = null; });
       charsSelect.addEventListener('change', () => {
         state.chars = Number(charsSelect.value);
         applySettings();
@@ -1548,25 +1724,42 @@
       fileInput.addEventListener('change', async event => {
         const file = event.target.files && event.target.files[0];
         if (!file) return;
-        setText(await file.text());
-        state.fileName = file.name || state.fileName;
-        state.fileHandle = null;
-        state.dirty = false;
-        fileInput.value = '';
-        resetHistory();
-        applySettings();
-        updateStatus();
-        renderOutline();
+        try {
+          setText(await readTextFile(file));
+          state.fileName = file.name || state.fileName;
+          state.fileHandle = null;
+          state.dirty = false;
+          lastSearchMatch = null;
+          resetHistory();
+          applySettings();
+          updateStatus();
+          renderOutline();
+        } catch (_error) {
+          alert('このテキストファイルを読み込めませんでした。');
+        } finally {
+          fileInput.value = '';
+        }
       });
 
-      const saved = localStorage.getItem(STORAGE_KEY);
+      window.addEventListener('beforeunload', (event) => {
+        if (!state.dirty) return;
+        event.preventDefault();
+        event.returnValue = '';
+      });
+
+      let saved = null;
+      try {
+        saved = localStorage.getItem(STORAGE_KEY);
+      } catch (_error) {
+        autosaveFailed = true;
+      }
       if (saved) {
         try {
           const data = JSON.parse(saved);
-          setText(data.text || sampleText);
+          setText(typeof data.text === 'string' ? data.text : sampleText);
           state.fileName = data.fileName || state.fileName;
           state.chars = [39, 40, 41].includes(Number(data.chars)) ? Number(data.chars) : 40;
-          state.lines = Number(data.lines) || state.lines;
+          state.lines = [15, 16].includes(Number(data.lines)) ? Number(data.lines) : 15;
           state.showLineNumbers = data.showLineNumbers !== false;
           state.showPageBreak = data.showPageBreak !== false;
           state.showGrid = data.showGrid !== false;
