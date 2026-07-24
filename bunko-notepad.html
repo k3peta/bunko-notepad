@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <title>bunko-notepad</title>
   <style>
     :root {
@@ -13,6 +13,8 @@
       --muted: #6f6a61;
       --line: #d6d0c5;
       --accent: #315f7b;
+      --app-height: 100dvh;
+      --editor-scroll-offset: 0px;
       --chars: 40;
       --lines: 15;
       --page-padding: 28px;
@@ -57,6 +59,7 @@
     button {
       cursor: pointer;
       white-space: nowrap;
+      touch-action: manipulation;
     }
 
     button.primary {
@@ -66,7 +69,7 @@
     }
 
     .app {
-      height: 100vh;
+      height: var(--app-height);
       display: flex;
       flex-direction: row;
       min-width: 0;
@@ -152,28 +155,35 @@
       background-image:
         linear-gradient(to left, rgba(70, 62, 50, 0.075) 1px, transparent 1px),
         linear-gradient(to bottom, rgba(70, 62, 50, 0.055) 1px, transparent 1px);
-      background-position: right top;
       background-size:
         var(--line-pitch) 100%,
         100% var(--char-pitch);
+      background-position:
+        calc(100% + var(--editor-scroll-offset)) top,
+        right top;
     }
 
     .paper.show-page-break .paper-guides::after {
       content: "";
       position: absolute;
-      top: 0;
-      bottom: 0;
-      right: calc(var(--line-pitch) * var(--lines));
-      width: 1px;
-      background: rgba(49, 95, 123, 0.22);
+      inset: 0;
+      background-image: linear-gradient(
+        to left,
+        rgba(49, 95, 123, 0.22) 0,
+        rgba(49, 95, 123, 0.22) 1px,
+        transparent 1px
+      );
+      background-repeat: repeat-x;
+      background-position: calc(100% + var(--editor-scroll-offset)) top;
+      background-size: calc(var(--line-pitch) * var(--lines)) 100%;
     }
 
     .line-ruler {
       position: absolute;
       top: 4px;
       right: var(--page-padding);
+      left: var(--page-padding);
       z-index: 4;
-      width: calc(var(--line-pitch) * var(--lines) * 2);
       height: var(--ruler-height);
       overflow: hidden;
       color: rgba(111, 106, 97, 0.78);
@@ -185,16 +195,16 @@
     .line-ruler[hidden] { display: none; }
 
     .line-ruler-track {
-      display: flex;
-      flex-direction: row-reverse;
-      align-items: center;
-      justify-content: flex-start;
+      position: relative;
+      display: block;
       height: 100%;
       width: 100%;
     }
 
     .line-ruler span {
-      flex: 0 0 var(--line-pitch);
+      position: absolute;
+      top: 0;
+      width: var(--line-pitch);
       text-align: center;
     }
 
@@ -250,6 +260,12 @@
       flex-direction: column;
       gap: 14px;
       overflow: auto;
+    }
+
+    .mobile-drawer-close,
+    .mobile-scrim,
+    .mobile-controls {
+      display: none;
     }
 
     .side h2 {
@@ -551,6 +567,260 @@
       line-height: 1;
       transform: translateY(-50%);
     }
+
+    @media (max-width: 980px) {
+      :root {
+        --page-padding: 12px;
+        --line-pitch: 28px;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: var(--app-height);
+        min-height: 0;
+        overscroll-behavior: none;
+      }
+
+      .app {
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+      }
+
+      .work {
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        padding: 0;
+        overflow: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .paper {
+        width: 100%;
+        min-width: 100%;
+        height: 100%;
+        min-height: max(
+          100%,
+          calc(var(--char-pitch) * var(--chars) + var(--char-pitch) + var(--page-padding) * 2)
+        );
+        margin: 0;
+        border: 0;
+        box-shadow: none;
+      }
+
+      .paper.no-ruler {
+        min-height: max(
+          100%,
+          calc(var(--char-pitch) * var(--chars) + var(--page-padding) * 2)
+        );
+      }
+
+      #editor {
+        scrollbar-width: none;
+      }
+
+      #editor::-webkit-scrollbar {
+        display: none;
+      }
+
+      .side {
+        position: fixed;
+        inset: 0 auto 0 0;
+        z-index: 30;
+        width: min(88vw, 340px);
+        height: var(--app-height);
+        padding:
+          calc(14px + env(safe-area-inset-top))
+          14px
+          calc(76px + env(safe-area-inset-bottom));
+        border-right: 1px solid var(--line);
+        box-shadow: 16px 0 36px rgba(36, 33, 29, 0.22);
+        transform: translateX(-105%);
+        transition: transform 220ms ease;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .side.is-open {
+        transform: translateX(0);
+      }
+
+      .mobile-drawer-close {
+        position: fixed;
+        top: auto;
+        left: calc(8px + env(safe-area-inset-left));
+        bottom: calc(8px + env(safe-area-inset-bottom));
+        z-index: 35;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: rgba(245, 242, 235, 0.96);
+        box-shadow: 0 8px 24px rgba(36, 33, 29, 0.18);
+        font-weight: 700;
+      }
+
+      body.settings-open .mobile-drawer-close {
+        display: inline-flex;
+      }
+
+      .mobile-scrim {
+        position: fixed;
+        inset: 0;
+        z-index: 25;
+        width: 100%;
+        height: 100%;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: rgba(36, 33, 29, 0.38);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 220ms ease;
+      }
+
+      body.settings-open .mobile-scrim {
+        display: block;
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .mobile-controls {
+        position: fixed;
+        left: calc(8px + env(safe-area-inset-left));
+        bottom: calc(8px + env(safe-area-inset-bottom));
+        z-index: 20;
+        display: inline-flex;
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid rgba(70, 62, 50, 0.18);
+        border-radius: 999px;
+        background: rgba(245, 242, 235, 0.94);
+        box-shadow: 0 8px 24px rgba(36, 33, 29, 0.18);
+        backdrop-filter: blur(14px);
+      }
+
+      .mobile-controls button {
+        min-height: 40px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: transparent;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .mobile-controls button.primary {
+        color: #fff;
+        background: var(--accent);
+      }
+
+      .mobile-status {
+        display: inline-flex;
+        align-items: center;
+        padding: 0 7px;
+        color: var(--muted);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      .preview {
+        z-index: 50;
+        height: var(--app-height);
+      }
+
+      .preview-head {
+        top: env(safe-area-inset-top);
+        right: 8px;
+        left: 8px;
+        min-height: 44px;
+        padding: 6px 8px;
+        border-radius: 0 0 6px 6px;
+      }
+
+      .preview-head .status {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .preview-head button {
+        min-height: 34px;
+      }
+
+      #closePreviewButton {
+        position: fixed;
+        left: calc(8px + env(safe-area-inset-left));
+        bottom: calc(8px + env(safe-area-inset-bottom));
+        z-index: 3;
+        min-height: 40px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: rgba(245, 242, 235, 0.96);
+        box-shadow: 0 8px 24px rgba(36, 33, 29, 0.18);
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .preview-body {
+        height: var(--app-height);
+        padding:
+          calc(54px + env(safe-area-inset-top))
+          max(8px, env(safe-area-inset-right))
+          calc(68px + env(safe-area-inset-bottom))
+          max(8px, env(safe-area-inset-left));
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .preview-spread {
+        margin-bottom: 12px;
+      }
+
+      .preview-pages {
+        display: flex;
+        flex-direction: column-reverse;
+        gap: 12px;
+      }
+
+      .preview-page {
+        padding: 12px;
+      }
+
+      .preview-page.empty {
+        display: none;
+      }
+
+      button,
+      input[type="text"],
+      select {
+        min-height: 40px;
+        font-size: 16px;
+      }
+    }
+
+    @media (max-width: 980px) and (orientation: landscape) {
+      .preview-pages {
+        display: grid;
+        grid-template-columns: auto auto;
+        gap: 12px;
+      }
+
+      .preview-page.empty {
+        display: block;
+      }
+    }
+
+    @media (max-width: 980px) and (prefers-reduced-motion: reduce) {
+      .side,
+      .mobile-scrim {
+        transition: none;
+      }
+    }
   </style>
 </head>
 <body>
@@ -584,7 +854,7 @@
         <label class="field"><input id="lineNumberToggle" type="checkbox" checked> 欄外に行番号を表示</label>
         <label class="field"><input id="pageBreakToggle" type="checkbox" checked> ページ区切り線を表示</label>
         <label class="field"><input id="gridToggle" type="checkbox" checked> 原稿用紙の薄い枡を表示</label>
-        <span class="status" id="statusLabel">0字 / 0行</span>
+        <span class="status" id="statusLabel">0字 / 現在1行 / 全1行</span>
       </div>
 
       <div class="block">
@@ -611,6 +881,7 @@
       </div>
     </aside>
 
+    <button class="mobile-drawer-close" id="mobileDrawerCloseButton" type="button" aria-label="設定を閉じる">← 閉じる</button>
     <main class="work">
       <div class="paper">
         <div class="paper-guides" aria-hidden="true"></div>
@@ -620,6 +891,13 @@
         <textarea id="editor" spellcheck="false" placeholder="ここへ入力"></textarea>
       </div>
     </main>
+
+    <button class="mobile-scrim" id="mobileScrim" type="button" aria-label="設定を閉じる"></button>
+    <nav class="mobile-controls" aria-label="モバイル操作">
+      <span class="mobile-status" id="mobileStatus" aria-live="polite">現在1 / 全1行</span>
+      <button id="mobileSettingsButton" type="button" aria-controls="side" aria-expanded="false">設定</button>
+      <button class="primary" id="mobilePreviewButton" type="button">プレビュー</button>
+    </nav>
   </div>
 
   <section class="preview" id="preview">
@@ -627,7 +905,7 @@
       <strong>プレビュー</strong>
       <span class="status" id="previewStatus"></span>
       <div class="spacer"></div>
-      <button id="closePreviewButton">閉じる</button>
+      <button id="closePreviewButton">← 閉じる</button>
     </div>
     <div class="preview-body" id="previewBody"></div>
   </section>
@@ -637,11 +915,19 @@
       const STORAGE_KEY = 'bunko-simple-draft';
       const HISTORY_MAX_ENTRIES = 500;
       const HISTORY_MAX_TEXT_UNITS = 8_000_000;
+      const mobileLayoutQuery = window.matchMedia('(max-width: 980px)');
+      const graphemeSegmenter = typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
+        ? new Intl.Segmenter('ja', { granularity: 'grapheme' })
+        : null;
       const editor = document.getElementById('editor');
+      const work = document.querySelector('.work');
+      const paper = document.querySelector('.paper');
+      const side = document.getElementById('side');
       const preview = document.getElementById('preview');
       const previewBody = document.getElementById('previewBody');
       const previewStatus = document.getElementById('previewStatus');
       const statusLabel = document.getElementById('statusLabel');
+      const mobileStatus = document.getElementById('mobileStatus');
       const fileInput = document.getElementById('fileInput');
       const fileNameInput = document.getElementById('fileNameInput');
       const charsSelect = document.getElementById('charsSelect');
@@ -656,6 +942,10 @@
       const searchInput = document.getElementById('searchInput');
       const replaceInput = document.getElementById('replaceInput');
       const regexToggle = document.getElementById('regexToggle');
+      const mobileDrawerCloseButton = document.getElementById('mobileDrawerCloseButton');
+      const mobileScrim = document.getElementById('mobileScrim');
+      const mobileSettingsButton = document.getElementById('mobileSettingsButton');
+      const mobilePreviewButton = document.getElementById('mobilePreviewButton');
       let shiftJisEncodeMap = null;
 
       const state = {
@@ -674,6 +964,8 @@
       let restoringHistory = false;
       let autosaveFailed = false;
       let lastSearchMatch = null;
+      let viewportResizeFrame = null;
+      let editorIsComposing = false;
 
       const sampleText = [
         '# 使い方',
@@ -778,9 +1070,11 @@
         const rootStyle = getComputedStyle(document.documentElement);
         const pagePadding = parseFloat(rootStyle.getPropertyValue('--page-padding')) || 28;
         const reservedRows = state.showLineNumbers ? 1 : 0;
-        const available = Math.max(240, paper.clientHeight - pagePadding * 2);
-        const charPitch = available / (state.chars + reservedRows);
-        const fontSize = Math.max(6, charPitch);
+        const layoutHeight = mobileLayoutQuery.matches ? work.clientHeight : paper.clientHeight;
+        const available = Math.max(240, layoutHeight - pagePadding * 2);
+        const minimumPitch = mobileLayoutQuery.matches ? 17 : 6;
+        const charPitch = Math.max(minimumPitch, available / (state.chars + reservedRows));
+        const fontSize = Math.max(minimumPitch, charPitch);
         document.documentElement.style.setProperty('--chars', state.chars);
         document.documentElement.style.setProperty('--lines', state.lines);
         document.documentElement.style.setProperty('--char-pitch', `${charPitch}px`);
@@ -800,21 +1094,103 @@
         renderOutline();
       }
 
-      function renderLineRuler() {
-        const lines = layoutLines(getText());
-        const caret = editor.selectionStart || 0;
+      function syncViewportHeight() {
+        const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        document.documentElement.style.setProperty('--app-height', `${Math.round(viewportHeight)}px`);
+      }
+
+      function isMobileLayout() {
+        return mobileLayoutQuery.matches;
+      }
+
+      function setMobileSettingsOpen(isOpen, restoreFocus = false) {
+        if (!isMobileLayout()) {
+          side.classList.remove('is-open');
+          side.inert = false;
+          return;
+        }
+        document.body.classList.toggle('settings-open', isOpen);
+        side.classList.toggle('is-open', isOpen);
+        side.inert = !isOpen;
+        mobileSettingsButton.setAttribute('aria-expanded', String(isOpen));
+        if (isOpen) {
+          mobileDrawerCloseButton.focus({ preventScroll: true });
+        } else if (restoreFocus) {
+          mobileSettingsButton.focus({ preventScroll: true });
+        }
+      }
+
+      function syncMobileLayoutState() {
+        syncViewportHeight();
+        if (isMobileLayout()) {
+          const isOpen = document.body.classList.contains('settings-open');
+          side.inert = !isOpen;
+          side.classList.toggle('is-open', isOpen);
+          mobileSettingsButton.setAttribute('aria-expanded', String(isOpen));
+        } else {
+          document.body.classList.remove('settings-open');
+          side.classList.remove('is-open');
+          side.inert = false;
+          mobileSettingsButton.setAttribute('aria-expanded', 'false');
+        }
+        applySettings();
+        updateStatus();
+      }
+
+      function handleViewportResize() {
+        if (viewportResizeFrame !== null) cancelAnimationFrame(viewportResizeFrame);
+        viewportResizeFrame = requestAnimationFrame(() => {
+          viewportResizeFrame = null;
+          syncViewportHeight();
+          applySettings();
+          updateStatus();
+        });
+      }
+
+      function findCurrentLayoutLine(lines, caret = editor.selectionStart || 0) {
         let currentLine = lines.findIndex((line) => {
           if (line.start === line.end) return caret === line.start;
           return caret >= line.start && caret < line.end;
         });
         if (currentLine < 0) currentLine = Math.max(0, lines.length - 1);
-        const spreadLines = state.lines * 2;
-        const spreadStart = Math.floor(currentLine / spreadLines) * spreadLines;
-        lineRulerTrack.innerHTML = Array.from({ length: spreadLines }, (_item, index) => {
-          const lineIndex = spreadStart + index;
-          const className = lineIndex === currentLine ? ' class="is-current"' : '';
-          return `<span${className}>${lineIndex + 1}</span>`;
-        }).join('');
+        return currentLine;
+      }
+
+      function getEditorScrollOffset() {
+        const maxScroll = Math.max(0, editor.scrollWidth - editor.clientWidth);
+        return Math.min(maxScroll, Math.abs(editor.scrollLeft));
+      }
+
+      function renderStatusText(text, lines, currentLine) {
+        const warning = autosaveFailed ? ' / 自動保存不可' : '';
+        statusLabel.textContent = `${Array.from(text).length}字 / 現在${currentLine + 1}行 / 全${lines.length}行${warning}`;
+        mobileStatus.textContent = `現在${currentLine + 1} / 全${lines.length}行`;
+      }
+
+      function renderLineRuler() {
+        const text = getText();
+        const lines = layoutLines(text);
+        const currentLine = findCurrentLayoutLine(lines);
+        const scrollOffset = getEditorScrollOffset();
+        const linePitch = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--line-pitch')) || 28;
+        const firstVisibleLine = Math.max(0, Math.floor(scrollOffset / linePitch) - 1);
+        const visibleLineCount = Math.ceil(editor.clientWidth / linePitch) + 3;
+        const lastVisibleLine = Math.min(
+          Math.max(lines.length, state.lines * 2) - 1,
+          firstVisibleLine + visibleLineCount
+        );
+
+        paper.style.setProperty('--editor-scroll-offset', `${scrollOffset}px`);
+        lineRulerTrack.innerHTML = Array.from(
+          { length: Math.max(0, lastVisibleLine - firstVisibleLine + 1) },
+          (_item, index) => {
+            const lineIndex = firstVisibleLine + index;
+            const className = lineIndex === currentLine ? ' class="is-current"' : '';
+            const right = lineIndex * linePitch - scrollOffset;
+            return `<span${className} style="right:${right}px">${lineIndex + 1}</span>`;
+          }
+        ).join('');
+        renderStatusText(text, lines, currentLine);
       }
 
       function extractHeadings(text) {
@@ -1193,8 +1569,7 @@
         } catch (_error) {
           autosaveFailed = true;
         }
-        const warning = autosaveFailed ? ' / 自動保存不可' : '';
-        statusLabel.textContent = `${Array.from(text).length}字 / ${lines.length}行${warning}`;
+        renderStatusText(text, lines, findCurrentLayoutLine(lines));
       }
 
       function renderPreviewLine(line) {
@@ -1219,6 +1594,7 @@
       }
 
       function renderPreview() {
+        if (isMobileLayout()) setMobileSettingsOpen(false);
         const text = getText();
         const lines = layoutLines(text);
         const pages = [];
@@ -1233,7 +1609,7 @@
         previewBody.innerHTML = spreads.map((spread, spreadIndex) => {
           const pageOffset = spreadIndex * 2;
           const pageHtml = spread.map((pageLines, sideIndex) => {
-            if (!pageLines) return '<article class="preview-page"><div class="preview-page-head"><span>空白</span></div><div class="preview-viewport"><div class="preview-manuscript"></div></div></article>';
+            if (!pageLines) return '<article class="preview-page empty"><div class="preview-page-head"><span>空白</span></div><div class="preview-viewport"><div class="preview-manuscript"></div></div></article>';
             const pageNumber = pageOffset + (sideIndex === 0 ? 2 : 1);
             const body = pageLines.map(renderPreviewLine).join('');
             return `
@@ -1253,6 +1629,12 @@
         }).join('');
         previewStatus.textContent = `見開き 1/${spreads.length}　総 ${pages.length}頁 / ${lines.length}行`;
         preview.classList.add('is-open');
+        if (isMobileLayout()) {
+          requestAnimationFrame(() => {
+            previewBody.scrollTop = 0;
+            previewBody.scrollLeft = Math.max(0, previewBody.scrollWidth - previewBody.clientWidth);
+          });
+        }
       }
 
       function closePreview() {
@@ -1610,10 +1992,112 @@
         commitProgrammaticEdit();
       }
 
+      function previousGraphemeIndex(text, index) {
+        if (index <= 0) return 0;
+        if (graphemeSegmenter) {
+          const segments = graphemeSegmenter.segment(text);
+          let segment = typeof segments.containing === 'function'
+            ? segments.containing(index - 1)
+            : null;
+          if (!segment) {
+            for (const candidate of segments) {
+              if (index - 1 >= candidate.index && index - 1 < candidate.index + candidate.segment.length) {
+                segment = candidate;
+                break;
+              }
+            }
+          }
+          if (segment) return segment.index;
+        }
+        let previous = index - 1;
+        if (
+          previous > 0
+          && text.charCodeAt(previous) >= 0xdc00
+          && text.charCodeAt(previous) <= 0xdfff
+          && text.charCodeAt(previous - 1) >= 0xd800
+          && text.charCodeAt(previous - 1) <= 0xdbff
+        ) {
+          previous -= 1;
+        }
+        return previous;
+      }
+
+      function nextGraphemeIndex(text, index) {
+        if (index >= text.length) return text.length;
+        if (graphemeSegmenter) {
+          const segments = graphemeSegmenter.segment(text);
+          let segment = typeof segments.containing === 'function'
+            ? segments.containing(index)
+            : null;
+          if (!segment) {
+            for (const candidate of segments) {
+              if (index >= candidate.index && index < candidate.index + candidate.segment.length) {
+                segment = candidate;
+                break;
+              }
+            }
+          }
+          if (segment) return segment.index + segment.segment.length;
+        }
+        return Math.min(
+          text.length,
+          index + (text.codePointAt(index) > 0xffff ? 2 : 1)
+        );
+      }
+
+      function moveCaretByCharacter(event) {
+        if (
+          (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')
+          || event.altKey
+          || event.ctrlKey
+          || event.metaKey
+          || event.isComposing
+          || editorIsComposing
+        ) {
+          return;
+        }
+
+        event.preventDefault();
+        const text = editor.value;
+        const direction = event.key === 'ArrowLeft' ? -1 : 1;
+        const start = editor.selectionStart || 0;
+        const end = editor.selectionEnd || 0;
+
+        if (!event.shiftKey) {
+          const caret = start !== end
+            ? (direction < 0 ? start : end)
+            : (direction < 0
+              ? previousGraphemeIndex(text, start)
+              : nextGraphemeIndex(text, end));
+          editor.setSelectionRange(caret, caret, 'none');
+          renderLineRuler();
+          return;
+        }
+
+        const selectionDirection = editor.selectionDirection;
+        const anchor = selectionDirection === 'backward' ? end : start;
+        const focus = selectionDirection === 'backward' ? start : end;
+        const nextFocus = direction < 0
+          ? previousGraphemeIndex(text, focus)
+          : nextGraphemeIndex(text, focus);
+        const nextStart = Math.min(anchor, nextFocus);
+        const nextEnd = Math.max(anchor, nextFocus);
+        const nextDirection = nextFocus < anchor
+          ? 'backward'
+          : (nextFocus > anchor ? 'forward' : 'none');
+        editor.setSelectionRange(nextStart, nextEnd, nextDirection);
+        renderLineRuler();
+      }
+
       function handleShortcuts(event) {
         if (event.key === 'Escape' && preview.classList.contains('is-open')) {
           event.preventDefault();
           closePreview();
+          return;
+        }
+        if (event.key === 'Escape' && document.body.classList.contains('settings-open')) {
+          event.preventDefault();
+          setMobileSettingsOpen(false, true);
           return;
         }
         const modifier = event.metaKey || event.ctrlKey;
@@ -1655,6 +2139,12 @@
 
       document.getElementById('previewButton').addEventListener('click', renderPreview);
       document.getElementById('closePreviewButton').addEventListener('click', closePreview);
+      mobileSettingsButton.addEventListener('click', () => {
+        setMobileSettingsOpen(!document.body.classList.contains('settings-open'));
+      });
+      mobileDrawerCloseButton.addEventListener('click', () => setMobileSettingsOpen(false, true));
+      mobileScrim.addEventListener('click', () => setMobileSettingsOpen(false, true));
+      mobilePreviewButton.addEventListener('click', renderPreview);
       document.getElementById('newButton').addEventListener('click', () => {
         if (state.dirty && !confirm('未保存の変更があります。新規原稿にしますか？')) return;
         state.fileName = 'bunko-notepad.txt';
@@ -1673,6 +2163,9 @@
       document.getElementById('replaceAllButton').addEventListener('click', replaceAll);
       document.getElementById('replaceNextButton').addEventListener('click', replaceNext);
       document.addEventListener('keydown', handleShortcuts);
+      editor.addEventListener('compositionstart', () => { editorIsComposing = true; });
+      editor.addEventListener('compositionend', () => { editorIsComposing = false; });
+      editor.addEventListener('keydown', moveCaretByCharacter);
       editor.addEventListener('input', () => {
         lastSearchMatch = null;
         markDirty();
@@ -1680,13 +2173,21 @@
         renderOutline();
         pushHistory();
       });
-      ['click', 'keyup', 'select'].forEach((eventName) => {
+      ['click', 'keyup', 'select', 'scroll'].forEach((eventName) => {
         editor.addEventListener(eventName, renderLineRuler);
       });
-      window.addEventListener('resize', () => {
-        applySettings();
-        updateStatus();
+      document.addEventListener('selectionchange', () => {
+        if (document.activeElement === editor) renderLineRuler();
       });
+      window.addEventListener('resize', handleViewportResize);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', handleViewportResize);
+      }
+      if (mobileLayoutQuery.addEventListener) {
+        mobileLayoutQuery.addEventListener('change', syncMobileLayoutState);
+      } else {
+        mobileLayoutQuery.addListener(syncMobileLayoutState);
+      }
       fileNameInput.addEventListener('change', () => {
         const nextName = fileNameInput.value.trim() || state.fileName;
         if (state.fileHandle && nextName !== state.fileHandle.name) state.fileHandle = null;
@@ -1769,7 +2270,8 @@
       } else {
         setText(sampleText);
       }
-      applySettings();
+      syncViewportHeight();
+      syncMobileLayoutState();
       updateStatus();
       renderOutline();
       resetHistory();
