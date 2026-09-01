@@ -279,6 +279,21 @@
       gap: 8px;
     }
 
+    .search-history-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: end;
+    }
+
+    .search-history-row label {
+      min-width: 0;
+    }
+
+    .search-history-row select {
+      min-width: 0;
+    }
+
     .side .block {
       display: grid;
       gap: 8px;
@@ -868,6 +883,10 @@
           <button id="replaceNextButton">置換検索</button>
           <button id="replaceAllButton">全置換</button>
         </div>
+        <div class="search-history-row">
+          <label>履歴 <select id="searchHistorySelect" aria-label="検索履歴"></select></label>
+          <button id="clearSearchHistoryButton" type="button">履歴を消去</button>
+        </div>
       </div>
 
       <div class="block">
@@ -915,6 +934,8 @@
       const STORAGE_KEY = 'bunko-simple-draft';
       const HISTORY_MAX_ENTRIES = 500;
       const HISTORY_MAX_TEXT_UNITS = 8_000_000;
+      const SEARCH_HISTORY_MAX_ENTRIES = 20;
+      const SEARCH_HISTORY_MAX_FIELD_LENGTH = 500;
       const mobileLayoutQuery = window.matchMedia('(max-width: 980px)');
       const graphemeSegmenter = typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
         ? new Intl.Segmenter('ja', { granularity: 'grapheme' })
@@ -942,6 +963,8 @@
       const searchInput = document.getElementById('searchInput');
       const replaceInput = document.getElementById('replaceInput');
       const regexToggle = document.getElementById('regexToggle');
+      const searchHistorySelect = document.getElementById('searchHistorySelect');
+      const clearSearchHistoryButton = document.getElementById('clearSearchHistoryButton');
       const mobileDrawerCloseButton = document.getElementById('mobileDrawerCloseButton');
       const mobileScrim = document.getElementById('mobileScrim');
       const mobileSettingsButton = document.getElementById('mobileSettingsButton');
@@ -956,6 +979,7 @@
         showLineNumbers: true,
         showPageBreak: true,
         showGrid: true,
+        searchHistory: [],
         outlineItems: [],
         dirty: false
       };
@@ -984,6 +1008,64 @@
 
       function normalize(text) {
         return String(text).replace(/\r\n?/g, '\n');
+      }
+
+      function sanitizeSearchHistory(value) {
+        if (!Array.isArray(value)) return [];
+        const sanitized = [];
+        const seen = new Set();
+        const inspectionLimit = Math.min(value.length, SEARCH_HISTORY_MAX_ENTRIES * 5);
+        for (let index = 0; index < inspectionLimit; index += 1) {
+          const item = value[index];
+          if (sanitized.length >= SEARCH_HISTORY_MAX_ENTRIES) break;
+          if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+          if (
+            typeof item.search !== 'string'
+            || typeof item.replace !== 'string'
+            || typeof item.regex !== 'boolean'
+            || item.search === ''
+            || item.search.length > SEARCH_HISTORY_MAX_FIELD_LENGTH
+            || item.replace.length > SEARCH_HISTORY_MAX_FIELD_LENGTH
+          ) continue;
+          const entry = {
+            search: item.search,
+            replace: item.replace,
+            regex: item.regex
+          };
+          const key = JSON.stringify([entry.search, entry.replace, entry.regex]);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          sanitized.push(entry);
+        }
+        return sanitized;
+      }
+
+      function summarizeHistoryText(value, maxLength = 34) {
+        const characters = Array.from(value.replace(/\s/g, ' '));
+        return characters.length <= maxLength
+          ? characters.join('')
+          : `${characters.slice(0, maxLength).join('')}…`;
+      }
+
+      function renderSearchHistory() {
+        searchHistorySelect.replaceChildren();
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = state.searchHistory.length ? '履歴から復元' : '履歴なし';
+        searchHistorySelect.appendChild(placeholder);
+        state.searchHistory.forEach((entry, index) => {
+          const option = document.createElement('option');
+          const searchLabel = summarizeHistoryText(entry.search);
+          const replaceLabel = entry.replace === ''
+            ? '（空）'
+            : summarizeHistoryText(entry.replace, 24);
+          option.value = String(index);
+          option.textContent = `${entry.regex ? '正規表現' : '文字列'}: ${searchLabel} → ${replaceLabel}`;
+          searchHistorySelect.appendChild(option);
+        });
+        searchHistorySelect.value = '';
+        searchHistorySelect.disabled = state.searchHistory.length === 0;
+        clearSearchHistoryButton.disabled = state.searchHistory.length === 0;
       }
 
       function escapeHtml(text) {
@@ -1552,23 +1634,28 @@
         }).join('');
       }
 
-      function updateStatus() {
-        const text = getText();
-        const lines = layoutLines(text);
+      function saveLocalState() {
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            text,
+            text: getText(),
             fileName: state.fileName,
             chars: state.chars,
             lines: state.lines,
             showLineNumbers: state.showLineNumbers,
             showPageBreak: state.showPageBreak,
-            showGrid: state.showGrid
+            showGrid: state.showGrid,
+            searchHistory: state.searchHistory
           }));
           autosaveFailed = false;
         } catch (_error) {
           autosaveFailed = true;
         }
+      }
+
+      function updateStatus() {
+        const text = getText();
+        const lines = layoutLines(text);
+        saveLocalState();
         renderStatusText(text, lines, findCurrentLayoutLine(lines));
       }
 
@@ -1838,6 +1925,43 @@
         return `${regexToggle.checked ? 'regex' : 'text'}:${searchInput.value}`;
       }
 
+      function recordSearchHistory() {
+        const entry = {
+          search: searchInput.value,
+          replace: replaceInput.value,
+          regex: regexToggle.checked
+        };
+        if (
+          entry.search === ''
+          || entry.search.length > SEARCH_HISTORY_MAX_FIELD_LENGTH
+          || entry.replace.length > SEARCH_HISTORY_MAX_FIELD_LENGTH
+        ) return;
+        state.searchHistory = sanitizeSearchHistory([entry, ...state.searchHistory]);
+        renderSearchHistory();
+        saveLocalState();
+      }
+
+      function restoreSearchHistory() {
+        if (searchHistorySelect.value === '') return;
+        const index = Number(searchHistorySelect.value);
+        const entry = Number.isInteger(index) ? state.searchHistory[index] : null;
+        searchHistorySelect.value = '';
+        if (!entry) return;
+        searchInput.value = entry.search;
+        replaceInput.value = entry.replace;
+        regexToggle.checked = entry.regex;
+        lastSearchMatch = null;
+        searchInput.focus();
+      }
+
+      function clearSearchHistory() {
+        if (!state.searchHistory.length) return;
+        if (!confirm('検索履歴を消去しますか？')) return;
+        state.searchHistory = [];
+        renderSearchHistory();
+        saveLocalState();
+      }
+
       function nextTextIndex(text, index) {
         if (index >= text.length) return text.length + 1;
         return index + (text.codePointAt(index) > 0xffff ? 2 : 1);
@@ -1887,6 +2011,7 @@
         const matcher = buildMatcher();
         if (!matcher) return;
         if (replaceInput.value === '' && !confirm('置換欄が空です。一致箇所を削除しますか？')) return;
+        recordSearchHistory();
         const text = getText();
         const replaced = text.replace(matcher, replaceInput.value);
         if (replaced === text) return;
@@ -1897,6 +2022,7 @@
       function findNext() {
         const matcher = buildMatcher();
         if (!matcher) return;
+        recordSearchHistory();
         const text = getText();
         const key = getSearchKey();
         let startAt = editor.selectionEnd || 0;
@@ -1931,6 +2057,7 @@
       function replaceNext() {
         const matcher = buildMatcher();
         if (!matcher) return;
+        recordSearchHistory();
         const text = getText();
         const key = getSearchKey();
         const selectionStart = editor.selectionStart || 0;
@@ -2162,6 +2289,8 @@
       document.getElementById('findNextButton').addEventListener('click', findNext);
       document.getElementById('replaceAllButton').addEventListener('click', replaceAll);
       document.getElementById('replaceNextButton').addEventListener('click', replaceNext);
+      searchHistorySelect.addEventListener('change', restoreSearchHistory);
+      clearSearchHistoryButton.addEventListener('click', clearSearchHistory);
       document.addEventListener('keydown', handleShortcuts);
       editor.addEventListener('compositionstart', () => { editorIsComposing = true; });
       editor.addEventListener('compositionend', () => { editorIsComposing = false; });
@@ -2264,12 +2393,14 @@
           state.showLineNumbers = data.showLineNumbers !== false;
           state.showPageBreak = data.showPageBreak !== false;
           state.showGrid = data.showGrid !== false;
+          state.searchHistory = sanitizeSearchHistory(data.searchHistory);
         } catch (_error) {
           setText(sampleText);
         }
       } else {
         setText(sampleText);
       }
+      renderSearchHistory();
       syncViewportHeight();
       syncMobileLayoutState();
       updateStatus();
